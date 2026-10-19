@@ -5,7 +5,7 @@ import { databaseMode, getDb } from "@/lib/db/client";
 import { describeDbError } from "@/lib/db/errors";
 import { getSetting } from "@/lib/db/misc";
 import { deploymentEnv, readEnv, studentEmailDomains } from "@/lib/env";
-import { emailConfigured } from "@/lib/notify";
+import { emailProvider, smtpTransport } from "@/lib/notify";
 
 export type CheckStatus = "ok" | "info" | "warn" | "bad";
 export type Check = { name: string; status: CheckStatus; detail: string; fix?: string };
@@ -31,7 +31,7 @@ async function runChecks(): Promise<Check[]> {
     ...checks[1],
     checkAdminEmails(),
     checkSiteUrl(),
-    checkEmail(),
+    await checkEmail(),
     checkCron(),
     checks[2],
   ];
@@ -191,13 +191,31 @@ function checkSiteUrl(): Check {
   };
 }
 
-function checkEmail(): Check {
-  if (emailConfigured()) return { name: "Email to students and residents (Resend)", status: "ok", detail: "RESEND_API_KEY and EMAIL_FROM are set." };
+async function checkEmail(): Promise<Check> {
+  const name = "Email to students and residents";
+  const provider = emailProvider();
+  if (provider === "resend") return { name, status: "ok", detail: "Sending through Resend." };
+  if (provider === "smtp") {
+    try {
+      await (await smtpTransport())!.verify();
+      return { name, status: "ok", detail: "Sending through your mailbox (SMTP); the login works." };
+    } catch (err) {
+      const message = String((err as Error)?.message ?? err);
+      return {
+        name,
+        status: "bad",
+        detail: /535|auth|credentials|password/i.test(message)
+          ? "The mailbox refused the login (wrong SMTP_USER or SMTP_PASSWORD)."
+          : "Couldn't connect to the mail server.",
+        fix: "For Gmail: SMTP_USER is the full Gmail address, and SMTP_PASSWORD is a 16-letter app password (Google Account → Security → 2-Step Verification → App passwords), not your normal password.",
+      };
+    }
+  }
   return {
-    name: "Email to students and residents (Resend)",
+    name,
     status: "warn",
-    detail: `${!readEnv("RESEND_API_KEY") ? "RESEND_API_KEY" : "EMAIL_FROM"} isn't set: confirmations aren't emailed, and students can't get sign-in links for digital support.`,
-    fix: "Create a Resend account and verified sender, then add RESEND_API_KEY and EMAIL_FROM in Vercel and redeploy.",
+    detail: "No email service is set up: confirmations aren't emailed, and students can't get sign-in links for digital support.",
+    fix: "Easiest, with no domain: a Gmail account with an app password. In Vercel add SMTP_USER (the Gmail address) and SMTP_PASSWORD (the app password), then redeploy.",
   };
 }
 

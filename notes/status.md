@@ -55,8 +55,11 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 
 - [ ] Confirm the live checks: a "צרו איתי קשר" request appears in Supabase → `callback_requests`;
       admin magic-link sign-in works; `/students/schedule` shows the live calendar (no yellow "offline" note).
-- [ ] Email: create a Resend account, verify a domain/sender, add `RESEND_API_KEY` and `EMAIL_FROM` in
-      Vercel, redeploy. Optionally use Resend as Supabase Auth's custom SMTP. Until then, emails are only logged.
+- [ ] Email (no domain needed): create a Gmail account for the project, turn on 2-Step Verification, create an
+      app password, add `SMTP_USER` and `SMTP_PASSWORD` in Vercel, redeploy, check `/admin/setup`. Use the same
+      Gmail as Supabase Auth's custom SMTP for admin sign-in emails. (Resend still works if a domain is available;
+      the school's em-is.org can't be used without its IT team.)
+- [ ] Set `STUDENT_EMAIL_DOMAINS=em-is.org` in Vercel (only school emails can sign in as students).
 - [ ] Add the events from `notes/meeting-notes.md` to the Google Calendar, with tags (README → "How to add an event").
       The seed file is only an offline fallback.
 - [ ] Add leaders to `ADMIN_EMAILS` and to `/admin/leaders`.

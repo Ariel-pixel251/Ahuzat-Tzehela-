@@ -45,7 +45,8 @@ npm run dev                  # http://localhost:3000
 With no environment values:
 
 - the database is a local Postgres (PGlite) in `.data/pglite`, migrated and seeded automatically;
-- emails are printed in the terminal, and student sign-in links appear on screen;
+- emails are printed in the terminal, and student sign-in links appear on screen (set `SMTP_USER`/`SMTP_PASSWORD`
+  in `.env.local` to really send them);
 - `/admin/login` shows a **Dev sign-in** button (never available in production);
 - events come from the public Google Calendar feed, or `data/events.seed.json` if it can't be reached.
 
@@ -60,8 +61,11 @@ With no environment values:
 | `ADMIN_EMAILS` | no | Comma-separated emails allowed into `/admin` (admins and leaders). |
 | `STUDENT_EMAIL_DOMAINS` | no | Optional. Only these email domains can sign in as students (e.g. `emis.org.il`). Students see residents' phone numbers when they take a request, so set this, or turn on leader approval in `/admin` → Digital support. |
 | `SITE_URL` | no | The site's public address, e.g. `https://ahuzat-tzahala.vercel.app`. |
-| `RESEND_API_KEY` | **yes** | resend.com → API Keys. |
-| `EMAIL_FROM` | no | A sender on a domain verified in Resend, e.g. `Ahuzat Tzahala <noreply@example.org>`. |
+| `SMTP_USER` | no | **Email, easiest option (free, no domain):** a Gmail address, e.g. `ahuzat.tzahala@gmail.com`. |
+| `SMTP_PASSWORD` | **yes** | That account's **app password**: Google Account → Security → 2-Step Verification (turn on) → App passwords. Not the normal password. |
+| `SMTP_HOST`, `SMTP_PORT` | no | Only for non-Gmail mailboxes (port defaults to 465). |
+| `RESEND_API_KEY` | **yes** | Alternative to SMTP: resend.com → API Keys (needs a domain you can verify). |
+| `EMAIL_FROM` | no | Sender name/address. Optional with Gmail; with Resend a sender on the verified domain, e.g. `Ahuzat Tzahala <noreply@example.org>`. |
 | `CRON_SECRET` | **yes** | Any long random string (e.g. `openssl rand -hex 32`). |
 
 Never commit `.env.local`; it is gitignored. Values are read forgivingly (surrounding spaces, line breaks and
@@ -101,8 +105,10 @@ To refresh the screenshots in `docs/screenshots`: `SCREENSHOTS=1 npx playwright 
    add `https://*-<your-vercel-team>.vercel.app/**`.
 4. **Authentication → Email**: Supabase's built-in email service only sends a few emails per hour, and only to
    members of your Supabase organisation. So either sign in to Supabase with the same email you put in
-   `ADMIN_EMAILS`, or (better) set Resend as custom SMTP (Authentication → Emails → SMTP Settings: host
-   `smtp.resend.com`, port 465, user `resend`, password = your Resend API key).
+   `ADMIN_EMAILS`, or (better) give Supabase the same mailbox the site uses (Authentication → Emails → SMTP
+   Settings). With Gmail: host `smtp.gmail.com`, port 465, username = the Gmail address, password = the app
+   password, sender email = the same Gmail address. With Resend: host `smtp.resend.com`, port 465, user `resend`,
+   password = your Resend API key.
 5. Copy the connection string and API keys into the environment variables above.
 
 **How data is protected.** The site's server talks to Postgres directly through `DATABASE_URL`, as the
