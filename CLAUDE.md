@@ -72,6 +72,9 @@ timetable_slots, announcements, leaders, leader_tasks, outbound_messages, settin
   New tables need `enable row level security` and the same revokes as the end of `0001_init.sql`.
 - **New event tag/form:** `TAGS` and `eventForm()` in `lib/calendar/parse.ts`, `lib/event-links.ts`, README tag table.
 - **Never** put user input into SQL text: always `$1, $2…` parameters. Never expose phone/email publicly.
+- **JSON/array parameters:** pass `JSON.stringify(value)` as `$n::text::jsonb` (arrays through `text_array($n::text::jsonb)`),
+  never `$n::jsonb`: postgres.js (production) would encode the string twice. `tests/postgres-driver.test.ts` runs the
+  production driver against a local server to catch this kind of difference; add a case there for new query shapes.
 
 ### Before opening a PR
 `npm run lint && npm run typecheck && npm test && npm run test:e2e` (the e2e tests start their own `next dev` on port

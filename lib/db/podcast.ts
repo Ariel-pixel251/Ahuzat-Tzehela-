@@ -45,7 +45,7 @@ export async function joinPodcast(db: Db, input: ParticipantInput) {
   const rows = await db.query<{ id: string }>(
     `insert into podcast_participants
        (name, email, phone, portal, topics, language, availability, registered_by, code, manage_token_hash)
-     values ($1, $2, $3, $4, text_array($5::jsonb), $6, $7, $8, $9, $10)
+     values ($1, $2, $3, $4, text_array($5::text::jsonb), $6, $7, $8, $9, $10)
      on conflict do nothing returning id`,
     [
       input.name,

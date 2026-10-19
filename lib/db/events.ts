@@ -50,7 +50,7 @@ export async function registerForEvent(db: Db, input: RegistrationInput, capacit
   const code = newCode();
   const token = input.email ? newToken() : null;
   const [row] = await db.query<{ r_id: string | null; r_status: string }>(
-    `select r_id, r_status from register_for_event($1::jsonb, $2::int)`,
+    `select r_id, r_status from register_for_event($1::text::jsonb, $2::int)`,
     [JSON.stringify({ ...input, code, manage_token_hash: token?.hash ?? null }), capacity],
   );
   if (row.r_status === "duplicate" || !row.r_id) return { status: "duplicate" };
@@ -65,7 +65,7 @@ export async function cancelRegistration(db: Db, id: string, capacity: number | 
   );
   const ids = promoted.map((p) => p.id).filter(Boolean);
   if (!ids.length) return [];
-  return db.query<Registration>(`select ${COLUMNS} from event_registrations where id = any(text_array($1::jsonb)::uuid[])`, [
+  return db.query<Registration>(`select ${COLUMNS} from event_registrations where id = any(text_array($1::text::jsonb)::uuid[])`, [
     JSON.stringify(ids),
   ]);
 }
@@ -96,7 +96,7 @@ export async function confirmedCounts(db: Db, eventKeys: string[]) {
   if (!eventKeys.length) return new Map<string, number>();
   const rows = await db.query<{ event_key: string; n: number }>(
     `select event_key, coalesce(sum(attendees), 0)::int as n from event_registrations
-      where status = 'confirmed' and event_key = any(text_array($1::jsonb)) group by event_key`,
+      where status = 'confirmed' and event_key = any(text_array($1::text::jsonb)) group by event_key`,
     [JSON.stringify(eventKeys)],
   );
   return new Map(rows.map((r) => [r.event_key, r.n]));

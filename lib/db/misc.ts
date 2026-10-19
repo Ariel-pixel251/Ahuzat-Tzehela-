@@ -19,7 +19,7 @@ export async function getSetting<T>(db: Db, key: string, fallback: T): Promise<T
 
 export const setSetting = (db: Db, key: string, value: unknown) =>
   db.query(
-    `insert into settings (key, value) values ($1, $2::jsonb) on conflict (key) do update set value = excluded.value`,
+    `insert into settings (key, value) values ($1, $2::text::jsonb) on conflict (key) do update set value = excluded.value`,
     [key, JSON.stringify(value)],
   );
 
@@ -82,7 +82,7 @@ export async function createLessonRequest(db: Db, input: LessonInput) {
   const code = newCode();
   const [row] = await db.query<{ id: string }>(
     `insert into lesson_requests (role, portal, name, phone, email, topics, other_topic, notes, registered_by, code)
-     values ($1, $2, $3, $4, $5, text_array($6::jsonb), $7, $8, $9, $10) returning id`,
+     values ($1, $2, $3, $4, $5, text_array($6::text::jsonb), $7, $8, $9, $10) returning id`,
     [
       input.role,
       input.portal,

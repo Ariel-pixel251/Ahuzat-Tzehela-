@@ -36,6 +36,9 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
   every pasted value (a stray space in `DATABASE_URL` breaks the database connection).
 - In the Supabase "Connect" window, `DATABASE_URL` is under the **Direct** tab → Method **Transaction
   pooler** (port 6543). The Framework tab only has the URL and the publishable key.
+- The first live form submission failed with "cannot extract elements from a scalar": the production driver
+  (postgres.js) double-encoded JSON parameters bound as `$n::jsonb`. Fixed by binding them as `$n::text::jsonb`;
+  `tests/postgres-driver.test.ts` now runs the production driver against a local server.
 
 ## Still to do
 

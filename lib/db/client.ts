@@ -19,10 +19,8 @@ export function getDb(): Promise<Db> {
 async function connect(): Promise<Db> {
   const url = process.env.DATABASE_URL;
   if (url) {
-    const { default: postgres } = await import("postgres");
-    // prepare: false is required for Supabase's transaction pooler
-    const sql = postgres(url, { prepare: false, max: 5 });
-    return { query: async (text, params = []) => (await sql.unsafe(text, params as never[])) as never };
+    const { postgresDb } = await import("./postgres");
+    return postgresDb(url).db;
   }
   if (process.env.NODE_ENV === "production") throw new DbNotConfiguredError();
   const { PGlite } = await import("@electric-sql/pglite");
