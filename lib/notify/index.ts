@@ -1,13 +1,19 @@
 import { queueMessage } from "@/lib/db/misc";
+import { readEnv } from "@/lib/env";
 import type { Db } from "@/lib/db/types";
 
 export type Message = { subject: string; body: string };
 export type Recipient = { name: string; email?: string | null; phone?: string | null; portal: "student" | "resident" };
 
+/** True when Resend is set up (RESEND_API_KEY and EMAIL_FROM). */
+export function emailConfigured() {
+  return Boolean(readEnv("RESEND_API_KEY") && readEnv("EMAIL_FROM"));
+}
+
 /** Sends email through Resend. Without RESEND_API_KEY the email is logged instead (local development). */
 export async function sendEmail(to: string, msg: Message): Promise<"sent" | "logged" | "failed"> {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const key = readEnv("RESEND_API_KEY");
+  const from = readEnv("EMAIL_FROM");
   if (!key || !from) {
     console.info(`[email] (not sent: RESEND_API_KEY/EMAIL_FROM not set)\nTo: ${to}\nSubject: ${msg.subject}\n\n${msg.body}\n`);
     return "logged";

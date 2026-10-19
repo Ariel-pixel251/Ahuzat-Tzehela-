@@ -78,6 +78,8 @@ test("event registration (a JSON object parameter) and the waiting list", async 
   if (first.status !== "confirmed") throw new Error();
   const promoted = await events.cancelRegistration(db, first.id, 1);
   expect(promoted.map((p) => p.name)).toEqual(["B"]);
+  await events.registerForEvent(db, { ...base, name: "C", phone: "0500000003" }, 1);
+  expect((await events.promoteWaitlist(db, base.event_key, 2)).map((p) => p.name)).toEqual(["C"]);
 });
 
 test("settings keep their type (false stays false)", async () => {

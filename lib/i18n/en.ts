@@ -24,6 +24,7 @@ export type Shared = {
     closed: string;
     notFound: string;
     alreadyJoined: string;
+    emailNotSetUp: string;
   };
 };
 
@@ -51,6 +52,7 @@ export const shared: Shared = {
     closed: "Registration for this event is closed.",
     notFound: "We couldn't find that event.",
     alreadyJoined: "This email is already signed up for the podcast. Check your inbox for your link.",
+    emailNotSetUp: "We can't send emails yet, so sign-in links aren't available. Please try again later or ask a project leader.",
   },
 };
 
@@ -158,6 +160,7 @@ export const students = {
     taken: "It's yours! See it under My requests.",
     takenWaiting: "It's yours! A leader will approve the match, then you'll see the contact details.",
     alreadyTaken: "Sorry, someone else just took this request.",
+    tooManyTaken: "You've taken several requests in the last hour. Please finish those first, or try again later.",
     signInToTake: "Sign in with your email to take requests.",
     myRequests: "My requests",
     needs: "Needs help with",
@@ -194,6 +197,7 @@ export const students = {
     send: "Email me a link",
     sent: "Check your email for a sign-in link (valid for 30 minutes).",
     devLink: "Email isn't set up on this server, so here is your link:",
+    schoolEmailOnly: (domains: string) => `Please use your school email (${domains}).`,
     tooMany: "We've sent several links already. Please check your inbox or wait 15 minutes.",
     confirmTitle: "Finish signing in",
     confirm: "Sign in",

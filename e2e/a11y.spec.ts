@@ -15,7 +15,7 @@ const residentPages = [
   "/residents/privacy",
 ];
 
-const studentPages = ["/", "/students", "/students/schedule", "/students/podcast", "/students/digital", "/students/sign-in", "/students/visit"];
+const studentPages = ["/", "/students", "/students/schedule", "/students/podcast", "/students/digital", "/students/sign-in", "/students/visit", "/admin/login", "/admin/setup"];
 
 // Resident portal: WCAG 2.1 AA plus AAA contrast.
 for (const path of residentPages) {

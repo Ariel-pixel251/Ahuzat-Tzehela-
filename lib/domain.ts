@@ -91,7 +91,12 @@ export async function registerEvent(
 /** Cancels a registration and tells anyone promoted from the waiting list. */
 export async function cancelEventRegistration(db: Db, registration: events.Registration, calendar: CalendarData) {
   const event = calendar.all.find((e) => e.key === registration.event_key);
+  // without the event (calendar unreachable or event changed), the daily job promotes people instead
   const promoted = await events.cancelRegistration(db, registration.id, event?.capacity ?? null);
+  await notifyPromoted(db, promoted, event);
+}
+
+async function notifyPromoted(db: Db, promoted: events.Registration[], event: CalendarEvent | undefined) {
   for (const p of promoted) {
     const locale = localeOf(p.portal);
     await notify(
@@ -104,6 +109,19 @@ export async function cancelEventRegistration(db: Db, registration: events.Regis
       }),
     );
   }
+}
+
+/** Daily: move people up from waiting lists of upcoming events that have room (e.g. capacity raised). */
+export async function promoteWaitlists(db: Db, calendar: CalendarData) {
+  if (calendar.source !== "calendar") return 0;
+  let count = 0;
+  for (const event of calendar.upcoming) {
+    if (event.capacity === undefined) continue;
+    const promoted = await events.promoteWaitlist(db, event.key, event.capacity);
+    await notifyPromoted(db, promoted, event);
+    count += promoted.length;
+  }
+  return count;
 }
 
 /** Sends the bilingual "cancelled" notice to everyone registered for an event. */
@@ -276,24 +294,32 @@ export async function createLesson(db: Db, input: misc.LessonInput) {
   return res;
 }
 
-export async function matchLessons(db: Db, learnerId: string, teacherId: string, topic: string | null) {
-  const ok = await misc.matchLesson(db, learnerId, teacherId, topic);
-  if (!ok) return false;
-  const all = await misc.listLessonRequests(db);
+/** Matches a learner with a teacher and tells both, each with the topic in their own language. */
+export async function matchLessons(db: Db, learnerId: string, teacherId: string) {
+  const [all, topics] = await Promise.all([misc.listLessonRequests(db), misc.listLessonTopics(db, false)]);
   const learner = all.find((r) => r.id === learnerId);
   const teacher = all.find((r) => r.id === teacherId);
-  if (learner && teacher) {
-    const t = topic ?? "";
-    await notify(db, learner, templates.lessonMatched(localeOf(learner.portal), {
-      name: firstName(learner.name), other: firstName(teacher.name), topic: t, contact: "",
-    }));
-    await notify(db, teacher, templates.lessonMatched(localeOf(teacher.portal), {
-      name: firstName(teacher.name),
-      other: firstName(learner.name),
-      topic: t,
-      contact: [learner.email, formatPhone(learner.phone)].filter(Boolean).join(", "),
-    }));
-  }
+  if (!learner || !teacher) return false;
+  // the learner's topics that the teacher offers, or all of the learner's topics
+  const shared = learner.topics.filter((t) => teacher.topics.includes(t));
+  const ids = shared.length ? shared : learner.topics;
+  const topicText = (locale: Locale) =>
+    [...ids.map((id) => topics.find((t) => t.id === id)?.[locale === "he" ? "name_he" : "name_en"]), learner.other_topic]
+      .filter(Boolean)
+      .join(", ");
+  if (!(await misc.matchLesson(db, learnerId, teacherId, topicText("en") || null))) return false;
+  await notify(db, learner, templates.lessonMatched(localeOf(learner.portal), {
+    name: firstName(learner.name),
+    other: firstName(teacher.name),
+    topic: topicText(localeOf(learner.portal)),
+    contact: "",
+  }));
+  await notify(db, teacher, templates.lessonMatched(localeOf(teacher.portal), {
+    name: firstName(teacher.name),
+    other: firstName(learner.name),
+    topic: topicText(localeOf(teacher.portal)),
+    contact: [learner.email, formatPhone(learner.phone)].filter(Boolean).join(", "),
+  }));
   return true;
 }
 

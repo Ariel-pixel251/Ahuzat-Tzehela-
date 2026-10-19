@@ -6,5 +6,6 @@ export interface Db {
 export class DbNotConfiguredError extends Error {
   constructor() {
     super("DATABASE_URL is not set");
+    this.name = "DbNotConfiguredError";
   }
 }

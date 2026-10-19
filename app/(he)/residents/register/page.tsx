@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { registerResidentForEvent } from "@/app/actions/residents";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { EventCard } from "@/components/residents/EventCard";
 import { buttonClass, Notice } from "@/components/ui";
 import { Wizard } from "@/components/Wizard";
@@ -41,7 +42,10 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   }
 
   const event = await getEvent(key);
-  if (!event || !eventForm(event)) return <Notice kind="bad">{sharedText.he.errors.notFound}</Notice>;
+  const form = event ? eventForm(event) : null;
+  if (form === "podcast") redirect("/residents/podcast");
+  if (form === "digital-support") redirect("/residents/help");
+  if (!event || !form) return <Notice kind="bad">{sharedText.he.errors.notFound}</Notice>;
   if (!registrationOpen(event)) return <Notice kind="warn">{sharedText.he.errors.closed}</Notice>;
 
   return (

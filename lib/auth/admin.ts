@@ -2,26 +2,22 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { parseEmailList, readEnv } from "@/lib/env";
+import { supabasePublicKey, supabaseUrl } from "@/lib/supabase-config";
+
+export { supabasePublicKey, supabaseUrl };
 
 /** Admins (and leaders) are the emails listed in ADMIN_EMAILS, signed in with a Supabase magic link. */
 export function adminEmails(): string[] {
-  return (process.env.ADMIN_EMAILS ?? "")
-    .split(/[,\s]+/)
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
+  return parseEmailList(readEnv("ADMIN_EMAILS"));
 }
 
 export function isAdminEmail(email: string | null | undefined) {
   return Boolean(email) && adminEmails().includes(email!.toLowerCase());
 }
 
-/** Supabase's public key: the new "publishable" key, or the legacy "anon" key. */
-export function supabasePublicKey() {
-  return process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-}
-
 export function supabaseAuthConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && supabasePublicKey());
+  return Boolean(supabaseUrl() && supabasePublicKey());
 }
 
 /** Local development without Supabase: a "dev sign-in" button (never in production). */
@@ -33,7 +29,7 @@ export const DEV_ADMIN_COOKIE = "dev_admin";
 
 export async function supabaseServer() {
   const store = await cookies();
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, supabasePublicKey()!, {
+  return createServerClient(supabaseUrl()!, supabasePublicKey()!, {
     cookies: {
       getAll: () => store.getAll(),
       setAll: (list) => {

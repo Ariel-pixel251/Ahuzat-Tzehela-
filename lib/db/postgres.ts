@@ -10,7 +10,7 @@ import type { Db } from "./types";
  */
 export function postgresDb(url: string, options: postgres.Options<Record<string, postgres.PostgresType>> = {}) {
   // prepare: false is required for Supabase's transaction pooler
-  const sql = postgres(url, { prepare: false, max: 5, ...options });
+  const sql = postgres(url, { prepare: false, max: 5, connect_timeout: 10, ...options });
   const db: Db = { query: async (text, params = []) => (await sql.unsafe(text, params as never[])) as never };
   return { db, end: () => sql.end() };
 }
