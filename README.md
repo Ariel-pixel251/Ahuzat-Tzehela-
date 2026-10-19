@@ -83,7 +83,8 @@ To refresh the screenshots in `docs/screenshots`: `SCREENSHOTS=1 npx playwright 
 
 ## Supabase setup
 
-1. Create a project at supabase.com (region: Frankfurt or closest).
+1. Create a project at supabase.com with region **Central EU (Frankfurt)**, the closest to Israel (neither Supabase
+   nor Vercel has an Israeli region).
 2. **SQL Editor** → paste and run `supabase/migrations/0001_init.sql`, then `supabase/seed.sql`.
    (Or with the Supabase CLI: `supabase link` then `supabase db push`, then run the seed.)
 3. **Authentication → URL Configuration**: set *Site URL* to your site, and add
@@ -103,8 +104,8 @@ ever see what the server chooses to show them (for example first names on the pu
 
 1. vercel.com → **Add New Project** → import this GitHub repository (framework: Next.js, defaults are fine).
 2. **Settings → Environment Variables**: add every variable from the table above (Production and Preview).
-3. Deploy. `vercel.json` runs the site in Tokyo (`hnd1`), next to the Supabase database
-   (`ap-northeast-1`); if you move the database, change `regions` to match. It also schedules `/api/cron/daily` every day at 06:00 UTC (08:00/09:00 in Israel):
+3. Deploy. `vercel.json` runs the site in Frankfurt (`fra1`), the closest region to Israel, next to the
+   Supabase database (create the Supabase project in **Central EU (Frankfurt)**, `eu-central-1`). It also schedules `/api/cron/daily` every day at 06:00 UTC (08:00/09:00 in Israel):
    reminders for tomorrow's events, then the data retention clean-up. Vercel sends `CRON_SECRET` automatically.
 4. Put the production address in `SITE_URL` and in Supabase's redirect URLs.
 
