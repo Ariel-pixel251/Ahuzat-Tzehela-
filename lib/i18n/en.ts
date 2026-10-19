@@ -232,7 +232,7 @@ export const students = {
     poster: "Printable QR poster",
     inviteEn:
       "Join the Ahuzat Tzahala project! Game nights, language nights, podcast pairs and helping residents with their phones. Sign up here:",
-    inviteHe: "הצטרפו לפרויקט אחוזת צהלה! ערבי משחקים, ערבי שפות, פודקאסט ועזרה לדיירים עם הטלפון. להרשמה:",
+    inviteHe: "הצטרפו לפרויקט אמיס - אחוזת צהלה - ביחד לדורות! ערבי משחקים, ערבי שפות, פודקאסט ועזרה לדיירים עם הטלפון. להרשמה:",
     posterTitle: "Volunteer at Ahuzat Tzahala",
     posterText: "Scan to see events and sign up",
   },

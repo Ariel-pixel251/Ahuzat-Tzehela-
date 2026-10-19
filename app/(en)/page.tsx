@@ -7,7 +7,7 @@ export default function Landing() {
       <h1 className="text-center text-3xl font-extrabold">
         Ahuzat Tzahala <span aria-hidden="true">·</span>{" "}
         <span lang="he" dir="rtl">
-          אחוזת צהלה
+          אמיס - אחוזת צהלה - ביחד לדורות
         </span>
       </h1>
       <Link
@@ -22,7 +22,7 @@ export default function Landing() {
         dir="rtl"
         className="flex min-h-[96px] items-center justify-center rounded-2xl border-4 border-ink bg-white px-6 text-center text-3xl font-extrabold text-ink hover:bg-sand"
       >
-        אני דייר/ת באחוזת צהלה
+        אני דייר/ת
       </Link>
       <p className="text-center">
         <Link href="/students/visit" className="font-bold text-brand underline underline-offset-4">
