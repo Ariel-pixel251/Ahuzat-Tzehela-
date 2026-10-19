@@ -70,7 +70,8 @@ Never commit `.env.local`; it is gitignored.
 ```bash
 npm run lint          # ESLint
 npm run typecheck     # TypeScript
-npm test              # Vitest: calendar parsing, claiming, pairing, waiting list, tokens/codes, phones, CSV
+npm test              # Vitest: calendar parsing, claiming, pairing, waiting list, tokens/codes, phones, CSV,
+                      #         and the production database driver (postgres.js) against a local server
 npm run test:e2e      # Playwright: resident flows, a student flow, axe accessibility, 360px and 200% zoom
 ```
 
@@ -115,7 +116,8 @@ ever see what the server chooses to show them (for example first names on the pu
 2. Add the event. Title format: **`English title | כותרת בעברית`**.
 3. In the description, write the English text, then a line with only `---`, then the Hebrew text.
 4. Add a **tag** to the title or description so the right registration button appears (see below).
-5. Save. The event appears on the site within about **10 minutes**.
+5. Save. The event appears on the site once Google updates the calendar's public feed (usually minutes, sometimes a
+   few hours) plus up to about 10–20 minutes for the site's own refresh.
 
 Students see the English part; residents see the Hebrew part. Without `|` or `---`, both portals show the
 same text. Tags and options are removed from the text people see. Recurring events, all-day and multi-day

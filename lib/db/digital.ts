@@ -41,7 +41,7 @@ export async function createDigitalRequest(db: Db, input: DigitalInput) {
     `insert into digital_requests
        (resident_name, resident_phone, resident_email, needs, needs_other, preferred_days, preferred_parts,
         language, registered_by, code, manage_token_hash)
-     values ($1, $2, $3, text_array($4::jsonb), $5, text_array($6::jsonb), text_array($7::jsonb), $8, $9, $10, $11)
+     values ($1, $2, $3, text_array($4::text::jsonb), $5, text_array($6::text::jsonb), text_array($7::text::jsonb), $8, $9, $10, $11)
      returning id`,
     [
       input.resident_name,
