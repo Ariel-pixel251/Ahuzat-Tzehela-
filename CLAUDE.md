@@ -3,6 +3,10 @@
 ## מטרה
 אתר לפרויקט אחוזת צהלה: פעילויות, הרשמה והתאמה בין תלמידי EMIS לבין דיירי אחוזת צהלה.
 מקור התוכן: `notes/meeting-notes.md`. הדרישות המלאות וההחלטות: `notes/brief.md`.
+**מצב נוכחי (מה פרוס, מה נשאר): `notes/status.md` – לקרוא בתחילת כל עבודה ולעדכן בסופה.**
+
+האתר החי: https://ahuzattzehela.vercel.app (Vercel, אזור Frankfurt; מסד נתונים Supabase ב-Frankfurt).
+בעל הפרויקט אינו מתכנת: להסביר צעדים ידניים (Vercel, Supabase, GitHub) בצורה פשוטה, צעד אחר צעד.
 
 ## שני פורטלים, קוד אחד
 - `/` – דף נחיתה עם שני כפתורים גדולים.
@@ -39,6 +43,45 @@ Vercel (אירוח ו-cron יומי). מקומית: PGlite במקום Supabase, 
 event_registrations (לפי UID של אירוע ביומן), digital_requests, students, podcast_participants/pairs,
 lesson_topics/requests/matches, lecture_proposals, visit_requests, callback_requests, courses,
 timetable_slots, announcements, leaders, leader_tasks, outbound_messages, settings.
+
+## How to work on this project (for Claude)
+
+### Map
+| Area | Where |
+| --- | --- |
+| Landing, student portal, admin (English, LTR root layout) | `app/(en)/` (`page.tsx`, `students/`, `admin/`) |
+| Resident portal (Hebrew, RTL root layout) | `app/(he)/residents/` |
+| Server actions (validate with zod → honeypot → rate limit → `lib/domain.ts`) | `app/actions/{residents,students,admin}.ts` |
+| Business rules shared by portals and admin (registration, claiming, pairing, notifications) | `lib/domain.ts` |
+| SQL data access; every function takes a `Db` | `lib/db/*.ts`; connection in `lib/db/client.ts` |
+| Schema, RLS, atomic SQL functions | `supabase/migrations/*.sql`; starter data `supabase/seed.sql` |
+| Calendar: iCal parsing, tags/options, seed fallback, event health | `lib/calendar/` |
+| Text (no strings hard-coded in components) | `lib/i18n/en.ts` (students), `lib/i18n/he.ts` (residents); admin pages are English inline |
+| Editable lists | `config/languages.ts`, `config/options.ts` |
+| Resident wizard and its steps | `components/Wizard.tsx`, `lib/wizard-steps.ts` |
+| Student/admin forms | `components/forms.tsx` |
+| Email + SMS/WhatsApp queue | `lib/notify/` |
+| Tests | `tests/` (Vitest, PGlite with the real migrations), `e2e/` (Playwright + axe, fixture calendar) |
+
+### Common changes
+- **Wording:** edit `lib/i18n/he.ts` / `en.ts`; keep both portals' rules (Hebrew-only residents, English-only students).
+- **New field on a form:** zod schema in the action → `lib/domain.ts` / `lib/db/*` → a **new migration** → the form
+  (resident: a wizard step in `lib/wizard-steps.ts`; student: `components/students/*`) → admin list + CSV export → tests.
+- **Database changes:** never edit `0001_init.sql`; add `supabase/migrations/000N_name.sql` (it's applied automatically
+  to the local PGlite and tests). In the PR, tell the owner to paste it into Supabase → SQL Editor → Run **before merging**.
+  New tables need `enable row level security` and the same revokes as the end of `0001_init.sql`.
+- **New event tag/form:** `TAGS` and `eventForm()` in `lib/calendar/parse.ts`, `lib/event-links.ts`, README tag table.
+- **Never** put user input into SQL text: always `$1, $2…` parameters. Never expose phone/email publicly.
+
+### Before opening a PR
+`npm run lint && npm run typecheck && npm test && npm run test:e2e` (the e2e tests start their own `next dev` on port
+3100 with a fresh local database; stop other dev servers first). For UI changes, check the resident pages at 360px.
+Vercel builds a preview for every PR; `main` deploys to production on merge. Update `notes/status.md` when setup or
+status changes.
+
+### Environment
+Local: `npm install && npm run dev`, with no `.env.local` needed (PGlite in `.data/`, emails logged, "Dev sign-in" on
+`/admin/login`). Production values live only in Vercel → Settings → Environment Variables (list in `.env.example`).
 
 ## שאלות פתוחות
 - מי זה Yocopas ו-dp2? מי המרצה ב-15 בדצמבר ומה שם ההרצאה (שם עבודה: "אל התהום וחזרה")?
