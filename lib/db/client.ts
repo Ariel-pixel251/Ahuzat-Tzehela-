@@ -1,4 +1,5 @@
 import "server-only";
+import { readEnv } from "../env";
 import { DbNotConfiguredError, type Db } from "./types";
 
 const globalForDb = globalThis as unknown as { __db?: Promise<Db> };
@@ -16,13 +17,19 @@ export function getDb(): Promise<Db> {
   return globalForDb.__db;
 }
 
+/** "postgres": Supabase via DATABASE_URL; "local": PGlite (development); "missing": production without DATABASE_URL. */
+export function databaseMode(): "postgres" | "local" | "missing" {
+  if (readEnv("DATABASE_URL")) return "postgres";
+  return process.env.NODE_ENV === "production" ? "missing" : "local";
+}
+
 async function connect(): Promise<Db> {
-  const url = process.env.DATABASE_URL;
-  if (url) {
+  const mode = databaseMode();
+  if (mode === "postgres") {
     const { postgresDb } = await import("./postgres");
-    return postgresDb(url).db;
+    return postgresDb(readEnv("DATABASE_URL")!).db;
   }
-  if (process.env.NODE_ENV === "production") throw new DbNotConfiguredError();
+  if (mode === "missing") throw new DbNotConfiguredError();
   const { PGlite } = await import("@electric-sql/pglite");
   const { applyMigrations } = await import("./migrate");
   const { mkdir } = await import("node:fs/promises");

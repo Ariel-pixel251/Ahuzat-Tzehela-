@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { headers } from "next/headers";
+import { deploymentEnv, readEnv } from "@/lib/env";
 import { getDb } from "@/lib/db/client";
 import { hitRateLimit } from "@/lib/db/misc";
 import { DbNotConfiguredError, type Db } from "@/lib/db/types";
@@ -12,7 +13,8 @@ export type { ActionState } from "@/lib/form";
 
 /** Absolute site URL for links in emails. */
 export async function getBaseUrl() {
-  if (process.env.SITE_URL) return process.env.SITE_URL.replace(/\/$/, "");
+  const siteUrl = readEnv("SITE_URL");
+  if (siteUrl) return siteUrl.replace(/\/+$/, "");
   // never build emailed links from request headers in production (they can be spoofed)
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   const h = await headers();
@@ -43,7 +45,12 @@ export async function withDb(locale: Locale, fn: (db: Db) => Promise<ActionState
   try {
     return await fn(await getDb());
   } catch (err) {
-    if (err instanceof DbNotConfiguredError) return { ok: false, message: shared(locale).errors.unavailable };
+    if (err instanceof DbNotConfiguredError) {
+      console.error(
+        `[db] DATABASE_URL is not set for this deployment (${deploymentEnv()}). Add it in Vercel → Settings → Environment Variables, then redeploy. See /admin/setup.`,
+      );
+      return { ok: false, message: shared(locale).errors.unavailable };
+    }
     // redirect() and notFound() work by throwing; let them through
     if (err && typeof err === "object" && "digest" in err) throw err;
     console.error(err);

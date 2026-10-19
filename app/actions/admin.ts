@@ -7,6 +7,7 @@ import { z } from "zod";
 import { LANGUAGES } from "@/config/languages";
 import { DAY_PARTS, DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS, PROJECTS } from "@/config/options";
 import {
+  adminEmails,
   DEV_ADMIN_COOKIE,
   devLoginAllowed,
   getAdmin,
@@ -15,9 +16,12 @@ import {
   supabaseServer,
 } from "@/lib/auth/admin";
 import { eventForm, getEvent } from "@/lib/calendar";
+import { getDb } from "@/lib/db/client";
 import * as digitalDb from "@/lib/db/digital";
 import * as leaders from "@/lib/db/leaders";
+import { isConnectionProblem } from "@/lib/db/errors";
 import * as misc from "@/lib/db/misc";
+import { clearAdminEmailFailure, recordAdminEmailFailure } from "@/lib/setup-status";
 import * as podcastDb from "@/lib/db/podcast";
 import type { Db } from "@/lib/db/types";
 import {
@@ -51,21 +55,49 @@ const done = (message = "Saved."): ActionState => ({ ok: true, message });
 
 // ---------------------------------------------------------------- sign in / out
 
+const SETUP_HINT = "Open the setup check (link below) to see what's missing.";
+
 export async function sendAdminLink(_: ActionState, fd: FormData): Promise<ActionState> {
-  if (!supabaseAuthConfigured()) return { ok: false, message: "Supabase Auth is not configured." };
+  if (!supabaseAuthConfigured()) {
+    return { ok: false, message: `Admin sign-in isn't configured on this deployment. ${SETUP_HINT}` };
+  }
+  if (adminEmails().length === 0) {
+    return { ok: false, message: `No admin emails are set up (ADMIN_EMAILS is empty). ${SETUP_HINT}` };
+  }
   const email = String(fd.get("email") ?? "").trim().toLowerCase();
-  const generic: ActionState = { ok: true, message: "If this email is on the admin list, a sign-in link is on its way." };
-  const limited = await withDb("en", async (db) =>
-    (await allowed(db, "admin:login", 5, 900)) ? null : { ok: false, message: "Too many attempts. Try again later." },
-  );
-  if (limited) return limited;
-  // don't reveal whether an email is an admin
+  const generic: ActionState = {
+    ok: true,
+    message: "If this email is on the admin list, a sign-in link is on its way. Check your spam folder too.",
+  };
+  // Rate limiting uses the database. If the database can't be reached at all, still let admins
+  // sign in (Supabase also rate-limits sign-in emails); any other error stops here.
+  let db: Db | null = null;
+  try {
+    db = await getDb();
+    if (!(await allowed(db, "admin:login", 5, 900))) {
+      return { ok: false, message: "Too many attempts. Try again in 15 minutes." };
+    }
+  } catch (err) {
+    if (!isConnectionProblem(err)) {
+      console.error("[admin] sign-in failed:", err);
+      return { ok: false, message: `Something went wrong. ${SETUP_HINT}` };
+    }
+    db = null;
+    console.error("[admin] sign-in rate limit skipped, the database can't be reached:", err);
+  }
+  // Same answer whether or not the email is an admin, and whether or not Supabase sent it,
+  // so the page can't be used to find admin addresses. Failures show on /admin/setup.
   if (!isAdminEmail(email)) return generic;
   const { error } = await (await supabaseServer()).auth.signInWithOtp({
     email,
     options: { emailRedirectTo: `${await getBaseUrl()}/admin/auth/callback` },
   });
-  if (error) console.error("[admin] magic link failed:", error.message);
+  if (error) {
+    console.error("[admin] magic link failed:", error.message);
+    if (db) await recordAdminEmailFailure(db, error.message).catch(() => {});
+  } else if (db) {
+    await clearAdminEmailFailure(db).catch(() => {});
+  }
   return generic;
 }
 

@@ -176,7 +176,8 @@ export async function requestSignInLink(_: ActionState, fd: FormData): Promise<A
     const sent = await sendEmail(student.email, templates.studentSignIn({ name: student.name.split(" ")[0], url }));
     // without an email provider (local development only), show the link on screen
     if (sent === "logged" && process.env.NODE_ENV !== "production") return { ok: true, data: { devLink: url } };
-    if (sent !== "sent") return { ok: false, message: en.unavailable };
+    if (sent === "logged") return { ok: false, message: en.emailNotSetUp };
+    if (sent !== "sent") return { ok: false, message: en.generic };
     return { ok: true, message: t.signIn.sent };
   });
 }

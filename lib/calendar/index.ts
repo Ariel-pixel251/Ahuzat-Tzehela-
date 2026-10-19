@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { cache } from "react";
 import seed from "@/data/events.seed.json";
+import { readEnv } from "@/lib/env";
 import { loadCalendar } from "./load";
 import type { SeedEvent } from "./parse";
 
@@ -16,7 +17,7 @@ export const DEFAULT_ICS_URL =
 const REVALIDATE_SECONDS = 600;
 
 async function fetchIcs(): Promise<string> {
-  const url = process.env.GOOGLE_CALENDAR_ICS_URL || DEFAULT_ICS_URL;
+  const url = readEnv("GOOGLE_CALENDAR_ICS_URL") || DEFAULT_ICS_URL;
   // file:// is used by the end-to-end tests to load a fixture feed
   if (url.startsWith("file:")) return readFile(fileURLToPath(url), "utf8");
   const res = await fetch(url, { next: { revalidate: REVALIDATE_SECONDS }, signal: AbortSignal.timeout(10_000) });

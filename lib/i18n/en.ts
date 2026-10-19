@@ -24,6 +24,7 @@ export type Shared = {
     closed: string;
     notFound: string;
     alreadyJoined: string;
+    emailNotSetUp: string;
   };
 };
 
@@ -51,6 +52,7 @@ export const shared: Shared = {
     closed: "Registration for this event is closed.",
     notFound: "We couldn't find that event.",
     alreadyJoined: "This email is already signed up for the podcast. Check your inbox for your link.",
+    emailNotSetUp: "We can't send emails yet, so sign-in links aren't available. Please try again later or ask a project leader.",
   },
 };
 
