@@ -1,0 +1,51 @@
+[
+  {
+    "id": "seed-game-night-2026-11-01",
+    "title": "Board games night | ערב משחקי קופסה",
+    "start": "2026-11-01T17:30",
+    "end": "2026-11-01T19:30",
+    "location": "Ahuzat Tzahala | אחוזת צהלה",
+    "description": "Board games with residents and students.\n---\nמשחקי קופסה עם הדיירים והתלמידים.",
+    "tags": ["game-night"]
+  },
+  {
+    "id": "seed-language-night-2026-11-16",
+    "title": "Language night | ערב שפות",
+    "start": "2026-11-16T18:30",
+    "end": "2026-11-16T20:30",
+    "location": "Ahuzat Tzahala | אחוזת צהלה",
+    "description": "Practise languages together, across generations.\n---\nמדברים בשפות שונות, יחד, בין הדורות.",
+    "tags": ["language-night"]
+  },
+  {
+    "id": "seed-hanukkah-2026-12-10",
+    "title": "Hanukkah party and candle lighting | מסיבת חנוכה והדלקת נרות",
+    "start": "2026-12-10",
+    "location": "Ahuzat Tzahala | אחוזת צהלה",
+    "tags": ["party"]
+  },
+  {
+    "id": "seed-yocopas-visit-2026-12-14",
+    "title": "Yocopas visit | ביקור Yocopas",
+    "start": "2026-12-14",
+    "end": "2026-12-15",
+    "tbc": true,
+    "tags": ["visit"]
+  },
+  {
+    "id": "seed-lecture-2026-12-15",
+    "title": "Lecture: \"To the Abyss and Back\" (working title) | הרצאה: \"אל התהום וחזרה\" (שם זמני)",
+    "start": "2026-12-15",
+    "description": "Speaker and title to be confirmed. dp2 students may be invited.\n---\nהמרצה ושם ההרצאה עוד ייקבעו. ייתכן שנזמין את תלמידי dp2.",
+    "tbc": true,
+    "tags": ["lecture"]
+  },
+  {
+    "id": "seed-holocaust-day-2027-01-27",
+    "title": "International Holocaust Remembrance Day | יום השואה הבינלאומי",
+    "start": "2027-01-27",
+    "description": "Memory in the living room with residents, and an English lecture by Leah (topic to be confirmed).\n---\nזיכרון בסלון עם הדיירים, והרצאה באנגלית של לאה (הנושא עוד ייקבע).",
+    "tbc": true,
+    "tags": ["memorial"]
+  }
+]
