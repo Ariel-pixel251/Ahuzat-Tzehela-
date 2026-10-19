@@ -22,6 +22,7 @@ test("register for an event (language night)", async ({ page }) => {
   await expect(page.getByText("נא לבחור אחת מהאפשרויות")).toBeVisible();
   await page.getByRole("button", { name: "עברית" }).click();
   await page.getByRole("button", { name: "רוסית" }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   await next(page);
 
   await page.getByLabel("שם", { exact: true }).fill("רבקה כהן");
@@ -47,7 +48,15 @@ test("ask for help with the phone, then check the status by phone and code", asy
   await page.getByRole("button", { name: "וואטסאפ" }).click();
   await next(page);
   await page.getByRole("button", { name: "שני" }).click();
-  await page.getByRole("button", { name: "בוקר" }).click();
+  await next(page);
+  await expect(page.getByRole("heading", { name: "באילו שעות נוח לכם?" })).toBeVisible();
+  await page.getByRole("button", { name: "10:00" }).click();
+  await page.getByRole("button", { name: "11:00" }).click();
+  // the hours fit the screen, also with bigger text
+  for (const large of [false, true]) {
+    if (large) await page.getByRole("button", { name: "הגדל טקסט" }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  }
   await next(page);
   await next(page); // Hebrew is chosen already
   await contact(page, "שרה לוי", "052-765-4321");

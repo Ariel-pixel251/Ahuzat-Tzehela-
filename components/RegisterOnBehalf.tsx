@@ -5,7 +5,7 @@ import { registerOnBehalf } from "@/app/actions/admin";
 import { ActionForm, MultiSelect, SelectField, TextField } from "@/components/forms";
 import { Notice } from "@/components/ui";
 import { LANGUAGES } from "@/config/languages";
-import { DAY_PARTS, DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { DAYS, HOURS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
 
 const TYPES = [
   { value: "event", label: "Event registration" },
@@ -83,7 +83,7 @@ export function RegisterOnBehalf({
             <MultiSelect name="needs" label="Needs help with" options={opts(DIGITAL_NEEDS)} summary={(n) => (n ? `${n} selected` : "Choose…")} />
             <TextField name="needs_other" label="Other / details" />
             <MultiSelect name="days" label="Days" options={opts(DAYS)} summary={(n) => (n ? `${n} selected` : "Any")} />
-            <MultiSelect name="parts" label="Time of day" options={opts(DAY_PARTS)} summary={(n) => (n ? `${n} selected` : "Any")} />
+            <MultiSelect name="hours" label="Hours" options={opts(HOURS)} summary={(n) => (n ? `${n} selected` : "Any")} />
             <SelectField name="language" label="Language" defaultValue="he" options={languages} />
           </>
         )}

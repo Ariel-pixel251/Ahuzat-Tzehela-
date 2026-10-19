@@ -10,6 +10,7 @@ export type DigitalInput = {
   needs: string[];
   needs_other: string | null;
   preferred_days: string[];
+  /** chosen hours, e.g. ["10:00","11:00"] (older requests: "morning"/"afternoon") */
   preferred_parts: string[];
   language: string;
   registered_by: string | null;

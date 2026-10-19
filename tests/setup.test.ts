@@ -3,6 +3,7 @@ import { describeDbError, isConnectionProblem } from "@/lib/db/errors";
 import { DbNotConfiguredError } from "@/lib/db/types";
 import { cleanEnvValue, parseEmailList, studentEmailAllowed } from "@/lib/env";
 import { adminEmailReason } from "@/lib/setup-status";
+import { formatHours, HOURS } from "@/config/options";
 
 describe("settings pasted into Vercel", () => {
   test.each([
@@ -61,4 +62,12 @@ test("admin sign-in email failures get a plain reason", () => {
   expect(adminEmailReason("Email address not authorized")).toMatch(/members of your Supabase organisation/);
   expect(adminEmailReason("Signups not allowed for otp")).toMatch(/sign-ups are disabled/);
   expect(adminEmailReason("something odd")).toMatch(/see the error/);
+});
+
+test("chosen hours are shown as ranges; old morning/afternoon choices still read", () => {
+  expect(HOURS.map((h) => h.code)).toEqual(["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]);
+  expect(formatHours(["11:00", "10:00", "15:00"], "en")).toBe("10:00–12:00, 15:00–16:00");
+  expect(formatHours(["20:00"], "he")).toBe("20:00–21:00");
+  expect(formatHours([], "en")).toBe("");
+  expect(formatHours(["morning"], "he")).toBe("בוקר");
 });

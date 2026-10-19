@@ -380,12 +380,14 @@ function FieldView({
               aria-checked={multi ? undefined : on}
               aria-pressed={multi ? on : undefined}
               onClick={() => toggle(o.value)}
-              className={`flex min-h-16 items-center justify-between gap-3 rounded-xl border-4 px-5 py-3 text-start text-xl font-bold ${
+              // the check mark has a small fixed-size spot in the corner, so a selected button keeps
+              // its size and the label isn't squeezed (also with bigger text)
+              className={`relative flex min-h-16 min-w-0 items-center justify-center rounded-xl border-4 px-3 py-3 text-center text-xl font-bold ${
                 on ? "border-brand bg-brand text-white" : "border-ink bg-white text-ink hover:bg-sand"
               }`}
             >
-              <span>{o.label}</span>
-              {on && <CheckIcon className="size-6" />}
+              <span className="min-w-0 [overflow-wrap:anywhere] [word-break:keep-all]">{o.label}</span>
+              {on && <CheckIcon className="absolute end-[6px] top-[6px] size-[20px]" />}
             </button>
           );
         })}

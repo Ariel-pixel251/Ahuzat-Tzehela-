@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { DAY_PARTS, DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, formatHours, HOURS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
 import { LANGUAGES } from "@/config/languages";
 import { eventForm, getCalendar, getEvent } from "@/lib/calendar";
 import * as digitalDb from "@/lib/db/digital";
@@ -34,10 +34,10 @@ async function guard(db: Db, fd: FormData, action: string): Promise<ActionState>
 const contact = { name: v.name, phone: v.phone(), email: v.optionalEmail };
 
 /** Availability as "English | עברית", following the site's bilingual convention. */
-function availabilityText(days: string[], parts: string[]) {
-  const en = [DAYS, DAY_PARTS].flatMap((list, i) => (i === 0 ? days : parts).map((c) => list.find((o) => o.code === c)?.en ?? c));
-  const heText = [DAYS, DAY_PARTS].flatMap((list, i) => (i === 0 ? days : parts).map((c) => list.find((o) => o.code === c)?.he ?? c));
-  return en.length ? `${en.join(", ")} | ${heText.join(", ")}` : null;
+function availabilityText(days: string[], hours: string[]) {
+  const part = (locale: "en" | "he") =>
+    [days.map((c) => DAYS.find((o) => o.code === c)?.[locale] ?? c).join(", "), formatHours(hours, locale)].filter(Boolean).join(" · ");
+  return days.length || hours.length ? `${part("en")} | ${part("he")}` : null;
 }
 
 // ---------------------------------------------------------------- event registration
@@ -96,10 +96,10 @@ export async function requestHelp(_: ActionState, fd: FormData): Promise<ActionS
       needs: v.codes(DIGITAL_NEEDS, { min: 1 }),
       needs_other: v.optionalText(300),
       days: v.codes(DAYS),
-      parts: v.codes(DAY_PARTS),
+      hours: v.codes(HOURS),
       language: v.language,
     });
-    const r = validate(schema, formObject(fd, ["needs", "days", "parts"]));
+    const r = validate(schema, formObject(fd, ["needs", "days", "hours"]));
     if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
     const res = await createDigital(
       db,
@@ -110,7 +110,7 @@ export async function requestHelp(_: ActionState, fd: FormData): Promise<ActionS
         needs: r.data.needs,
         needs_other: r.data.needs_other,
         preferred_days: r.data.days,
-        preferred_parts: r.data.parts,
+        preferred_parts: r.data.hours,
         language: r.data.language,
         registered_by: null,
       },
@@ -131,9 +131,9 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
       topics: v.codes(PODCAST_TOPICS, { min: 1 }),
       language: v.language,
       days: v.codes(DAYS),
-      parts: v.codes(DAY_PARTS),
+      hours: v.codes(HOURS),
     });
-    const r = validate(schema, formObject(fd, ["topics", "days", "parts"]));
+    const r = validate(schema, formObject(fd, ["topics", "days", "hours"]));
     if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
     const res = await joinPodcast(
       db,
@@ -144,7 +144,7 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
         portal: "resident",
         topics: r.data.topics,
         language: r.data.language,
-        availability: availabilityText(r.data.days, r.data.parts),
+        availability: availabilityText(r.data.days, r.data.hours),
         registered_by: null,
       },
       await getBaseUrl(),

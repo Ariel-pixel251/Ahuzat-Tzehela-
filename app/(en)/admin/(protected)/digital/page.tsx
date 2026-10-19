@@ -5,7 +5,7 @@ import { AdminSection, CsvLink, Table } from "@/components/admin";
 import { InlineForm } from "@/components/forms";
 import { Badge, PageTitle } from "@/components/ui";
 import { languageName } from "@/config/languages";
-import { DAY_PARTS, DAYS, DIGITAL_NEEDS, optionLabel } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, formatHours, optionLabel } from "@/config/options";
 import { getDb } from "@/lib/db/client";
 import { listAllDigitalRequests } from "@/lib/db/digital";
 import { listStudents } from "@/lib/db/students";
@@ -40,7 +40,7 @@ export default async function AdminDigital() {
             </div>,
             <span key="n">{r.needs.map((n) => optionLabel(DIGITAL_NEEDS, n, "en")).join(", ")}{r.needs_other ? ` (${r.needs_other})` : ""}</span>,
             <span key="w">
-              {[...r.preferred_days.map((d) => optionLabel(DAYS, d, "en")), ...r.preferred_parts.map((p) => optionLabel(DAY_PARTS, p, "en"))].join(", ")}
+              {[r.preferred_days.map((d) => optionLabel(DAYS, d, "en")).join(", "), formatHours(r.preferred_parts, "en")].filter(Boolean).join(" · ")}
               {" · "}{languageName(r.language, "en")}
             </span>,
             <span key="s" className="flex flex-col gap-1">
