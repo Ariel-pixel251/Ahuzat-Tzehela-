@@ -30,7 +30,7 @@ export const shared: Shared = {
 };
 
 export const residents = {
-  brand: "אחוזת צהלה",
+  brand: "אמיס - אחוזת צהלה - ביחד לדורות",
   backHome: "חזרה לדף הראשי",
   callMe: "בקשו שאתקשר אליכם",
   textBigger: "הגדל טקסט",
@@ -172,7 +172,7 @@ export const residents = {
       ],
     },
   },
-  print: { title: "אירועים קרובים באחוזת צהלה", scan: "להרשמה: סרקו את הקוד או מלאו כאן:", name: "שם", phone: "טלפון", people: "כמה אנשים" },
+  print: { title: "אירועים קרובים – אמיס - אחוזת צהלה - ביחד לדורות", scan: "להרשמה: סרקו את הקוד או מלאו כאן:", name: "שם", phone: "טלפון", people: "כמה אנשים" },
   announcement: "הודעה",
 } as const;
 

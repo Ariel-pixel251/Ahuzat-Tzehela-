@@ -1,9 +1,9 @@
-import type { Locale } from "@/lib/i18n";
+import { residentsText, type Locale } from "@/lib/i18n";
 import type { Message } from "./index";
 
 // Short, plain messages. Hebrew for residents, English for students.
 
-const sign = { en: "\n\nAhuzat Tzahala × EMIS", he: "\n\nאחוזת צהלה" };
+const sign = { en: "\n\nAhuzat Tzahala × EMIS", he: `\n\n${residentsText.brand}` };
 
 export const templates = {
   eventConfirmation(locale: Locale, p: { name: string; title: string; when: string; waitlist: boolean; code: string; manageUrl?: string | null }): Message {

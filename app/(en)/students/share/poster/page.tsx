@@ -16,7 +16,7 @@ export default async function Poster() {
         <PrintButton label={t.share.poster} />
       </div>
       <h1 className="text-[34pt] font-extrabold leading-tight">{t.share.posterTitle}</h1>
-      <p lang="he" dir="rtl" className="mt-2 text-[24pt] font-bold">התנדבות באחוזת צהלה</p>
+      <p lang="he" dir="rtl" className="mt-2 text-[24pt] font-bold">התנדבות באמיס - אחוזת צהלה - ביחד לדורות</p>
       <QrCode value={url} label={url} className="my-8 size-[110mm]" />
       <p className="text-[18pt]">{t.share.posterText}</p>
       <p className="mt-2 font-mono text-[16pt]">{url.replace(/^https?:\/\//, "")}</p>

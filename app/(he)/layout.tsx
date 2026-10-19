@@ -4,8 +4,8 @@ import type { Metadata, Viewport } from "next";
 import { textSizeScript } from "@/components/TextSizeToggle";
 
 export const metadata: Metadata = {
-  title: { default: "אחוזת צהלה", template: "%s · אחוזת צהלה" },
-  description: "פעילויות, אירועים ועזרה לדיירי אחוזת צהלה.",
+  title: { default: "אמיס - אחוזת צהלה - ביחד לדורות", template: "%s · אמיס - אחוזת צהלה - ביחד לדורות" },
+  description: "אמיס - אחוזת צהלה - ביחד לדורות: פעילויות, אירועים ועזרה לדיירים.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
