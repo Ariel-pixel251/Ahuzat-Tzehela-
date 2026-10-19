@@ -200,6 +200,15 @@ describe("event registration capacity and waiting list", () => {
     expect(promoted.map((p) => p.name)).toEqual(["Person 2"]);
   });
 
+  test("raising the capacity later moves people up (daily promotion)", async () => {
+    await events.registerForEvent(db, reg(1, 2), 2);
+    await events.registerForEvent(db, reg(2, 1), 2);
+    await events.registerForEvent(db, reg(3, 1), 2);
+    expect(await events.promoteWaitlist(db, "uid-1@google.com", 2)).toHaveLength(0);
+    const promoted = await events.promoteWaitlist(db, "uid-1@google.com", 4);
+    expect(promoted.map((p) => p.name).sort()).toEqual(["Person 2", "Person 3"]);
+  });
+
   test("without a capacity everyone is confirmed; registering twice is a duplicate", async () => {
     for (let i = 1; i <= 5; i++) expect((await events.registerForEvent(db, reg(i), null)).status).toBe("confirmed");
     expect((await events.registerForEvent(db, reg(1), null)).status).toBe("duplicate");

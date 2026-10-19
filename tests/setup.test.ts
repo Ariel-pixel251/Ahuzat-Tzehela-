@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { describeDbError, isConnectionProblem } from "@/lib/db/errors";
 import { DbNotConfiguredError } from "@/lib/db/types";
-import { cleanEnvValue, parseEmailList } from "@/lib/env";
+import { cleanEnvValue, parseEmailList, studentEmailAllowed } from "@/lib/env";
 import { adminEmailReason } from "@/lib/setup-status";
 
 describe("settings pasted into Vercel", () => {
@@ -23,6 +23,14 @@ describe("settings pasted into Vercel", () => {
     expect(parseEmailList("not an email")).toEqual([]);
     expect(parseEmailList(undefined)).toEqual([]);
   });
+});
+
+test("student sign-in can be limited to school email domains", () => {
+  expect(studentEmailAllowed("dana@gmail.com", [])).toBe(true);
+  expect(studentEmailAllowed("dana@emis.org.il", ["emis.org.il"])).toBe(true);
+  expect(studentEmailAllowed("dana@students.emis.org.il", ["emis.org.il"])).toBe(true);
+  expect(studentEmailAllowed("dana@gmail.com", ["emis.org.il"])).toBe(false);
+  expect(studentEmailAllowed("dana@notemis.org.il", ["emis.org.il"])).toBe(false);
 });
 
 describe("database problems explained", () => {
@@ -52,5 +60,5 @@ test("admin sign-in email failures get a plain reason", () => {
   expect(adminEmailReason("email rate limit exceeded")).toMatch(/limit/);
   expect(adminEmailReason("Email address not authorized")).toMatch(/members of your Supabase organisation/);
   expect(adminEmailReason("Signups not allowed for otp")).toMatch(/sign-ups are disabled/);
-  expect(adminEmailReason("something odd")).toMatch(/Vercel → Logs/);
+  expect(adminEmailReason("something odd")).toMatch(/see the error/);
 });

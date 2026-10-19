@@ -19,6 +19,20 @@ export function parseEmailList(raw: string | undefined): string[] {
   return [...(raw ?? "").matchAll(/[^\s,;<>"']+@[^\s,;<>"']+/g)].map((m) => m[0].toLowerCase());
 }
 
+/** Allowed student email domains (STUDENT_EMAIL_DOMAINS, e.g. "emis.org.il"); empty means any. */
+export function studentEmailDomains(): string[] {
+  return (readEnv("STUDENT_EMAIL_DOMAINS") ?? "")
+    .split(/[\s,;]+/)
+    .map((d) => d.replace(/^@/, "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function studentEmailAllowed(email: string, domains = studentEmailDomains()): boolean {
+  if (!domains.length) return true;
+  const domain = email.toLowerCase().split("@").at(-1) ?? "";
+  return domains.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
 /** "production", "preview" or "development" on Vercel; "local" elsewhere. */
 export function deploymentEnv() {
   return process.env.VERCEL_ENV ?? "local";

@@ -9,7 +9,7 @@ import { MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
 import { currentStudent, STUDENT_COOKIE } from "@/lib/auth/student";
 import { eventForm, getEvent } from "@/lib/calendar";
 import * as digitalDb from "@/lib/db/digital";
-import { createVisitRequest, listLessonTopics } from "@/lib/db/misc";
+import { createVisitRequest, hitRateLimit, listLessonTopics } from "@/lib/db/misc";
 import * as podcastDb from "@/lib/db/podcast";
 import {
   acceptConduct,
@@ -27,6 +27,7 @@ import {
   requestPodcastPair,
   respondPodcastRequest,
 } from "@/lib/domain";
+import { studentEmailAllowed, studentEmailDomains } from "@/lib/env";
 import type { ActionState } from "@/lib/form";
 import { shared, studentsText as t } from "@/lib/i18n";
 import { sendEmail } from "@/lib/notify";
@@ -169,6 +170,11 @@ export async function requestSignInLink(_: ActionState, fd: FormData): Promise<A
     if (stop) return stop;
     const r = validate(z.object({ name: v.name, email: v.email, phone: v.optionalPhone(intl) }), formObject(fd));
     if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "en") };
+    // students see residents' phone numbers, so sign-in can be limited to school addresses
+    const domains = studentEmailDomains();
+    if (!studentEmailAllowed(r.data.email, domains)) {
+      return { ok: false, errors: { email: t.signIn.schoolEmailOnly(domains.map((d) => `@${d}`).join(", ")) } };
+    }
     const student = await upsertStudent(db, r.data);
     const token = await createLoginToken(db, student.id);
     if (!token) return { ok: false, message: t.signIn.tooMany };
@@ -218,6 +224,8 @@ export async function takeRequest(_: ActionState, fd: FormData): Promise<ActionS
   const res = await withDb("en", async (db) => {
     const student = await currentStudent(db);
     if (!student) return { ok: false, message: t.digital.signInToTake };
+    if (!studentEmailAllowed(student.email)) return { ok: false, message: t.digital.signInToTake };
+    if (!(await hitRateLimit(db, `students:take:${student.id}`, 5, 3600))) return { ok: false, message: t.digital.tooManyTaken };
     const result = await claimDigital(db, String(fd.get("request") ?? ""), student.id, await getBaseUrl());
     if (result === "unavailable") return { ok: false, message: t.digital.alreadyTaken };
     revalidatePath("/students/digital");

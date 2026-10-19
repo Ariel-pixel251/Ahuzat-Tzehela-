@@ -40,7 +40,18 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
   (postgres.js) double-encoded JSON parameters bound as `$n::jsonb`. Fixed by binding them as `$n::text::jsonb`;
   `tests/postgres-driver.test.ts` now runs the production driver against a local server.
 
+- Admin sign-in links weren't sent and forms said "Sign-ups are not available" when the deployment couldn't
+  reach the database (e.g. `DATABASE_URL` missing for that environment, or not redeployed). Admin sign-in no
+  longer depends on the database, settings are read forgivingly, and **`/admin/setup`** explains what's wrong.
+- Supabase's built-in email only sends to members of the Supabase organisation, a few per hour: sign in to
+  Supabase with the admin email, or set Resend as custom SMTP.
+
 ## Still to do
+
+- [ ] Run `supabase/migrations/0002_promote_waitlist.sql` in Supabase → SQL Editor (daily waiting-list promotion).
+- [ ] Open `/admin/setup` on the live site and fix anything red or yellow.
+- [ ] Protect residents' phone numbers: set `STUDENT_EMAIL_DOMAINS` (school email domain) in Vercel, or turn on
+      leader approval in `/admin` → Digital support.
 
 - [ ] Confirm the live checks: a "צרו איתי קשר" request appears in Supabase → `callback_requests`;
       admin magic-link sign-in works; `/students/schedule` shows the live calendar (no yellow "offline" note).

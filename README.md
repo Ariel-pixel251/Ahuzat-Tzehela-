@@ -58,12 +58,18 @@ With no environment values:
 | `NEXT_PUBLIC_SUPABASE_URL` | no | Supabase → **Connect** → Framework → Next.js (or Project Settings → API). |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | no (public by design) | Same place; starts with `sb_publishable_`. Every table is closed to it. (Older projects: `NEXT_PUBLIC_SUPABASE_ANON_KEY` with the `anon` key also works.) |
 | `ADMIN_EMAILS` | no | Comma-separated emails allowed into `/admin` (admins and leaders). |
+| `STUDENT_EMAIL_DOMAINS` | no | Optional. Only these email domains can sign in as students (e.g. `emis.org.il`). Students see residents' phone numbers when they take a request, so set this, or turn on leader approval in `/admin` → Digital support. |
 | `SITE_URL` | no | The site's public address, e.g. `https://ahuzat-tzahala.vercel.app`. |
 | `RESEND_API_KEY` | **yes** | resend.com → API Keys. |
 | `EMAIL_FROM` | no | A sender on a domain verified in Resend, e.g. `Ahuzat Tzahala <noreply@example.org>`. |
 | `CRON_SECRET` | **yes** | Any long random string (e.g. `openssl rand -hex 32`). |
 
-Never commit `.env.local`; it is gitignored.
+Never commit `.env.local`; it is gitignored. Values are read forgivingly (surrounding spaces, line breaks and
+quotes are ignored), but settings changed in Vercel only apply after **Deployments → ⋯ → Redeploy**.
+
+**Something not working on the live site?** Open **`/admin/setup`** (e.g. `https://ahuzattzehela.vercel.app/admin/setup`).
+It checks the database, admin sign-in, admin emails, email, the daily job and the calendar for the deployment you're on,
+and says in plain words what to fix. It never shows secret values.
 
 ## Tests
 
@@ -86,12 +92,17 @@ To refresh the screenshots in `docs/screenshots`: `SCREENSHOTS=1 npx playwright 
 
 1. Create a project at supabase.com with region **Central EU (Frankfurt)**, the closest to Israel (neither Supabase
    nor Vercel has an Israeli region).
-2. **SQL Editor** → paste and run `supabase/migrations/0001_init.sql`, then `supabase/seed.sql`.
+2. **SQL Editor** → paste and run every file in `supabase/migrations/` in order (`0001_init.sql`,
+   `0002_promote_waitlist.sql`, …), then `supabase/seed.sql`. Later database updates come as new numbered files;
+   `/admin/setup` says when one hasn't been run.
    (Or with the Supabase CLI: `supabase link` then `supabase db push`, then run the seed.)
 3. **Authentication → URL Configuration**: set *Site URL* to your site, and add
-   `https://<your-site>/admin/auth/callback` to *Redirect URLs*.
-4. **Authentication → Email**: the built-in email service is fine to start (it is rate-limited). For
-   reliability, set Resend as custom SMTP.
+   `https://<your-site>/admin/auth/callback` to *Redirect URLs*. To sign in on Vercel preview deployments too, also
+   add `https://*-<your-vercel-team>.vercel.app/**`.
+4. **Authentication → Email**: Supabase's built-in email service only sends a few emails per hour, and only to
+   members of your Supabase organisation. So either sign in to Supabase with the same email you put in
+   `ADMIN_EMAILS`, or (better) set Resend as custom SMTP (Authentication → Emails → SMTP Settings: host
+   `smtp.resend.com`, port 465, user `resend`, password = your Resend API key).
 5. Copy the connection string and API keys into the environment variables above.
 
 **How data is protected.** The site's server talks to Postgres directly through `DATABASE_URL`, as the

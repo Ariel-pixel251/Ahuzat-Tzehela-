@@ -71,8 +71,8 @@ const exports: Record<string, Export> = {
 export async function GET(_: Request, { params }: { params: Promise<{ dataset: string }> }) {
   if (!(await getAdmin())) return new NextResponse("Unauthorized", { status: 401 });
   const { dataset } = await params;
+  if (!Object.hasOwn(exports, dataset)) return new NextResponse("Not found", { status: 404 });
   const build = exports[dataset];
-  if (!build) return new NextResponse("Not found", { status: 404 });
   const [head, rows] = await build(await getDb());
   return new NextResponse(toCsv(head, rows), {
     headers: {

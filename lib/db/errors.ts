@@ -61,8 +61,22 @@ export function isConnectionProblem(err: unknown): boolean {
   if (e?.name === "DbNotConfiguredError" || e?.message === "DATABASE_URL is not set") return true;
   const code = e?.code ?? "";
   return (
-    ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "CONNECT_TIMEOUT", "ERR_INVALID_URL"].includes(code) ||
-    /^(08|28)/.test(code) ||
-    /tenant or user not found|invalid url/i.test(String(e?.message ?? ""))
+    [
+      "ENOTFOUND",
+      "EAI_AGAIN",
+      "ECONNREFUSED",
+      "ETIMEDOUT",
+      "ECONNRESET",
+      "ERR_INVALID_URL",
+      // postgres.js
+      "CONNECT_TIMEOUT",
+      "CONNECTION_CLOSED",
+      "CONNECTION_DESTROYED",
+      "CONNECTION_ENDED",
+      // too many connections
+      "53300",
+    ].includes(code) ||
+    /^(08|28|57P0)/.test(code) ||
+    /tenant or user not found|invalid url|max client connections|too many (clients|connections)/i.test(String(e?.message ?? ""))
   );
 }

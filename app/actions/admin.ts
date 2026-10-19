@@ -21,7 +21,7 @@ import * as digitalDb from "@/lib/db/digital";
 import * as leaders from "@/lib/db/leaders";
 import { isConnectionProblem } from "@/lib/db/errors";
 import * as misc from "@/lib/db/misc";
-import { clearAdminEmailFailure, recordAdminEmailFailure } from "@/lib/setup-status";
+import { adminEmailReason } from "@/lib/setup-status";
 import * as podcastDb from "@/lib/db/podcast";
 import type { Db } from "@/lib/db/types";
 import {
@@ -71,10 +71,8 @@ export async function sendAdminLink(_: ActionState, fd: FormData): Promise<Actio
   };
   // Rate limiting uses the database. If the database can't be reached at all, still let admins
   // sign in (Supabase also rate-limits sign-in emails); any other error stops here.
-  let db: Db | null = null;
   try {
-    db = await getDb();
-    if (!(await allowed(db, "admin:login", 5, 900))) {
+    if (!(await allowed(await getDb(), "admin:login", 5, 900))) {
       return { ok: false, message: "Too many attempts. Try again in 15 minutes." };
     }
   } catch (err) {
@@ -82,22 +80,19 @@ export async function sendAdminLink(_: ActionState, fd: FormData): Promise<Actio
       console.error("[admin] sign-in failed:", err);
       return { ok: false, message: `Something went wrong. ${SETUP_HINT}` };
     }
-    db = null;
     console.error("[admin] sign-in rate limit skipped, the database can't be reached:", err);
   }
-  // Same answer whether or not the email is an admin, and whether or not Supabase sent it,
-  // so the page can't be used to find admin addresses. Failures show on /admin/setup.
-  if (!isAdminEmail(email)) return generic;
-  const { error } = await (await supabaseServer()).auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `${await getBaseUrl()}/admin/auth/callback` },
-  });
-  if (error) {
-    console.error("[admin] magic link failed:", error.message);
-    if (db) await recordAdminEmailFailure(db, error.message).catch(() => {});
-  } else if (db) {
-    await clearAdminEmailFailure(db).catch(() => {});
+  // Same answer, in about the same time, whether or not the email is an admin and whether or
+  // not Supabase sent it, so the page can't be used to find admin addresses.
+  const started = Date.now();
+  if (isAdminEmail(email)) {
+    const { error } = await (await supabaseServer()).auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${await getBaseUrl()}/admin/auth/callback` },
+    });
+    if (error) console.error(`[admin] magic link failed: ${error.message}. ${adminEmailReason(error.message)}`);
   }
+  await new Promise((r) => setTimeout(r, Math.max(0, 900 + Math.random() * 300 - (Date.now() - started))));
   return generic;
 }
 
@@ -187,7 +182,7 @@ export async function toggleLessonTopic(_: ActionState, fd: FormData): Promise<A
 
 export async function matchLesson(_: ActionState, fd: FormData): Promise<ActionState> {
   return asAdmin(async (db) => {
-    const ok = await matchLessons(db, id(fd, "learner"), id(fd, "teacher"), String(fd.get("topic") ?? "") || null);
+    const ok = await matchLessons(db, id(fd, "learner"), id(fd, "teacher"));
     return ok ? done("Matched. Both were notified.") : { ok: false, message: "This learner is already matched." };
   });
 }

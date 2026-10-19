@@ -70,6 +70,16 @@ export async function cancelRegistration(db: Db, id: string, capacity: number | 
   ]);
 }
 
+/** Moves people up from the waiting list while they fit. Returns the promoted registrations. */
+export async function promoteWaitlist(db: Db, eventKey: string, capacity: number) {
+  const promoted = await db.query<{ id: string }>(`select promote_waitlist($1, $2::int) as id`, [eventKey, capacity]);
+  const ids = promoted.map((p) => p.id).filter(Boolean);
+  if (!ids.length) return [];
+  return db.query<Registration>(`select ${COLUMNS} from event_registrations where id = any(text_array($1::text::jsonb)::uuid[])`, [
+    JSON.stringify(ids),
+  ]);
+}
+
 export async function getRegistrationByToken(db: Db, rawToken: string) {
   const [row] = await db.query<Registration>(`select ${COLUMNS} from event_registrations where manage_token_hash = $1`, [
     hashToken(rawToken),

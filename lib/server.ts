@@ -13,6 +13,8 @@ export type { ActionState } from "@/lib/form";
 
 /** Absolute site URL for links in emails. */
 export async function getBaseUrl() {
+  // a preview deployment links to itself, so sign-in links work there (its cookies live on its own address)
+  if (process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   const siteUrl = readEnv("SITE_URL");
   if (siteUrl) return siteUrl.replace(/\/+$/, "");
   // never build emailed links from request headers in production (they can be spoofed)

@@ -39,7 +39,6 @@ export default async function AdminLessons() {
                   <select id={`t-${l.id}`} name="teacher" required className="min-h-10 rounded border-2 border-ink px-2">
                     {pool.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  <input type="hidden" name="topic" value={l.topics.map(topicName).join(", ") || (l.other_topic ?? "")} />
                 </InlineForm>,
               ];
             })}

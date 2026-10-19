@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCalendar } from "@/lib/calendar";
 import { getDb } from "@/lib/db/client";
 import { readEnv } from "@/lib/env";
-import { sendReminders } from "@/lib/domain";
+import { promoteWaitlists, sendReminders } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,15 @@ export async function GET(request: NextRequest) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
   const db = await getDb();
-  const reminders = await sendReminders(db, await getCalendar());
+  const calendar = await getCalendar();
+  const reminders = await sendReminders(db, calendar);
+  let promoted = 0;
+  try {
+    promoted = await promoteWaitlists(db, calendar);
+  } catch (err) {
+    // supabase/migrations/0002_promote_waitlist.sql not run yet
+    console.error("[cron] waiting-list promotion skipped:", err);
+  }
   await db.query("select purge_old_data()");
-  return NextResponse.json({ reminders });
+  return NextResponse.json({ reminders, promoted });
 }

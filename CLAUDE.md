@@ -85,6 +85,10 @@ status changes.
 ### Environment
 Local: `npm install && npm run dev`, with no `.env.local` needed (PGlite in `.data/`, emails logged, "Dev sign-in" on
 `/admin/login`). Production values live only in Vercel → Settings → Environment Variables (list in `.env.example`).
+Read settings with `readEnv()` from `lib/env.ts` (it forgives pasted spaces/quotes), never `process.env.X` directly.
+When something doesn't work on the live site, first ask the owner to open `/admin/setup` and send a screenshot:
+it explains database, auth, email, cron and calendar problems for that deployment (`lib/setup-check.ts`).
+A new migration file must also be added to the setup check (it detects whether `0002…` etc. has been run).
 
 ## שאלות פתוחות
 - מי זה Yocopas ו-dp2? מי המרצה ב-15 בדצמבר ומה שם ההרצאה (שם עבודה: "אל התהום וחזרה")?

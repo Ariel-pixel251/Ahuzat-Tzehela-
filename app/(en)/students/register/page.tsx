@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { EventRegistrationForm } from "@/components/students/EventRegistrationForm";
 import { Badge, Notice, PageTitle } from "@/components/ui";
 import { eventForm, getEvent, registrationOpen } from "@/lib/calendar";
@@ -11,7 +12,9 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   const { event: key = "" } = await searchParams;
   const event = await getEvent(key);
   const form = event ? eventForm(event) : null;
-  if (!event || !form || form === "podcast" || form === "digital-support") {
+  if (form === "podcast") redirect("/students/podcast");
+  if (form === "digital-support") redirect("/students/digital");
+  if (!event || !form) {
     return <Notice kind="bad">{sharedText.en.errors.notFound}</Notice>;
   }
   return (

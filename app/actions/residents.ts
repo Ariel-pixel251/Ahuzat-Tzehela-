@@ -17,7 +17,7 @@ import {
   registerEvent,
 } from "@/lib/domain";
 import type { ActionState } from "@/lib/form";
-import { residentsText, shared } from "@/lib/i18n";
+import { residentsText, shared, studentsText } from "@/lib/i18n";
 import { allowed, getBaseUrl, localizeErrors, withDb } from "@/lib/server";
 import { formObject, isBot, v, validate } from "@/lib/validation";
 
@@ -241,7 +241,9 @@ export async function cancelRegistrationByToken(_: ActionState, fd: FormData): P
   const locale = fd.get("locale") === "en" ? "en" : "he";
   return withDb(locale, async (db) => {
     const reg = await eventsDb.getRegistrationByToken(db, String(fd.get("token") ?? ""));
-    if (!reg || reg.status === "cancelled") return { ok: false, message: residentsText.pages.manage.invalid };
+    if (!reg || reg.status === "cancelled") {
+      return { ok: false, message: locale === "en" ? studentsText.manage.invalid : residentsText.pages.manage.invalid };
+    }
     await cancelEventRegistration(db, reg, await getCalendar());
     return { ok: true };
   });

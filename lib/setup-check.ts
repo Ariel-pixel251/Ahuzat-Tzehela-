@@ -1,11 +1,11 @@
 import "server-only";
 import { adminEmails, supabasePublicKey, supabaseUrl } from "@/lib/auth/admin";
-import { getCalendar, TIME_ZONE } from "@/lib/calendar";
+import { getCalendar } from "@/lib/calendar";
 import { databaseMode, getDb } from "@/lib/db/client";
 import { describeDbError } from "@/lib/db/errors";
-import { deploymentEnv, readEnv } from "@/lib/env";
+import { getSetting } from "@/lib/db/misc";
+import { deploymentEnv, readEnv, studentEmailDomains } from "@/lib/env";
 import { emailConfigured } from "@/lib/notify";
-import { lastAdminEmailFailure, type AdminEmailFailure } from "@/lib/setup-status";
 
 export type CheckStatus = "ok" | "info" | "warn" | "bad";
 export type Check = { name: string; status: CheckStatus; detail: string; fix?: string };
@@ -51,23 +51,41 @@ async function checkDatabase(): Promise<Check[]> {
     ];
   }
   let topics: number;
-  let failure: AdminEmailFailure | null;
+  let m0002: boolean;
   try {
     const db = await getDb();
     // one query proves the connection, the tables (lesson_topics) and the functions (hit_rate_limit)
-    const [row] = await db.query<{ topics: number; functions: boolean }>(
-      "select (select count(*)::int from lesson_topics) as topics, to_regproc('public.hit_rate_limit') is not null as functions",
+    const [row] = await db.query<{ topics: number; functions: boolean; m0002: boolean }>(
+      `select (select count(*)::int from lesson_topics) as topics,
+              to_regproc('public.hit_rate_limit') is not null as functions,
+              to_regproc('public.promote_waitlist') is not null as m0002`,
     );
     if (!row.functions) {
       return dbProblem({ code: "42883" });
     }
     topics = row.topics;
-    failure = await lastAdminEmailFailure(db);
+    m0002 = row.m0002;
   } catch (err) {
     return dbProblem(err);
   }
-  const checks: Check[] = [
-    { name: "Database", status: "ok", detail: "Connected, and the tables are set up." },
+  const approval = Boolean(await getSetting(await getDb(), "require_match_approval", false).catch(() => false));
+  return [
+    m0002
+      ? { name: "Database", status: "ok", detail: "Connected, and the tables are set up." }
+      : {
+          name: "Database update",
+          status: "warn",
+          detail: "Connected, but the latest database update hasn't been run (waiting lists won't move up automatically).",
+          fix: "In Supabase → SQL Editor, run supabase/migrations/0002_promote_waitlist.sql once.",
+        },
+    studentEmailDomains().length || approval
+      ? { name: "Residents' phone numbers", status: "ok", detail: "Protected by school-email sign-in or leader approval." }
+      : {
+          name: "Residents' phone numbers",
+          status: "warn",
+          detail: "Anyone with any email can sign in as a student, take a digital-support request and see the resident's phone number.",
+          fix: "Add STUDENT_EMAIL_DOMAINS in Vercel (the school's email domain, e.g. emis.org.il) and redeploy, or turn on leader approval in /admin → Digital support.",
+        },
     topics > 0
       ? { name: "Starter data", status: "ok", detail: "Lesson topics are set up." }
       : {
@@ -77,15 +95,6 @@ async function checkDatabase(): Promise<Check[]> {
           fix: "In Supabase → SQL Editor, run supabase/seed.sql (or add topics in /admin → Lessons).",
         },
   ];
-  if (failure) {
-    checks.push({
-      name: "Last admin sign-in email",
-      status: "bad",
-      detail: `Sending failed on ${new Date(failure.at).toLocaleString("en-GB", { timeZone: TIME_ZONE })} (Israel time).`,
-      fix: failure.reason,
-    });
-  }
-  return checks;
 }
 
 function dbProblem(err: unknown): Check[] {
@@ -142,7 +151,7 @@ async function checkSupabaseAuth(): Promise<Check[]> {
       status: "info",
       detail:
         "Unless Supabase uses your own email service, it only sends a few emails per hour, and only to members of your Supabase organisation.",
-      fix: "If the email doesn't arrive: sign in to Supabase with the same email as in ADMIN_EMAILS, or set up custom SMTP (Supabase → Authentication → Emails → SMTP Settings, e.g. Resend).",
+      fix: "If the email doesn't arrive: check spam; sign in to Supabase with the same email as in ADMIN_EMAILS, or set up custom SMTP (Supabase → Authentication → Emails → SMTP Settings, e.g. Resend). The exact reason is in Vercel → Logs (search \"magic link failed\").",
     });
     return checks;
   } catch {
@@ -193,14 +202,14 @@ function checkEmail(): Check {
 }
 
 function checkCron(): Check {
-  return readEnv("CRON_SECRET")
-    ? { name: "Daily reminders", status: "ok", detail: "CRON_SECRET is set." }
-    : {
-        name: "Daily reminders",
-        status: process.env.NODE_ENV === "production" ? "warn" : "ok",
-        detail: "CRON_SECRET isn't set, so the daily reminders and clean-up don't run.",
-        fix: process.env.NODE_ENV === "production" ? ADD_VAR("CRON_SECRET") : undefined,
-      };
+  if (readEnv("CRON_SECRET")) return { name: "Daily reminders", status: "ok", detail: "CRON_SECRET is set." };
+  if (process.env.NODE_ENV !== "production") return { name: "Daily reminders", status: "ok", detail: "Not needed locally." };
+  return {
+    name: "Daily reminders",
+    status: "warn",
+    detail: "CRON_SECRET isn't set, so the daily reminders and clean-up don't run.",
+    fix: ADD_VAR("CRON_SECRET"),
+  };
 }
 
 async function checkCalendar(): Promise<Check> {
