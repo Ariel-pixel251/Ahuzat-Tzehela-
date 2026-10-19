@@ -103,7 +103,8 @@ ever see what the server chooses to show them (for example first names on the pu
 
 1. vercel.com → **Add New Project** → import this GitHub repository (framework: Next.js, defaults are fine).
 2. **Settings → Environment Variables**: add every variable from the table above (Production and Preview).
-3. Deploy. `vercel.json` schedules `/api/cron/daily` every day at 06:00 UTC (08:00/09:00 in Israel):
+3. Deploy. `vercel.json` runs the site in Tokyo (`hnd1`), next to the Supabase database
+   (`ap-northeast-1`); if you move the database, change `regions` to match. It also schedules `/api/cron/daily` every day at 06:00 UTC (08:00/09:00 in Israel):
    reminders for tomorrow's events, then the data retention clean-up. Vercel sends `CRON_SECRET` automatically.
 4. Put the production address in `SITE_URL` and in Supabase's redirect URLs.
 
