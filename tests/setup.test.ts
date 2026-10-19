@@ -3,7 +3,8 @@ import { describeDbError, isConnectionProblem } from "@/lib/db/errors";
 import { DbNotConfiguredError } from "@/lib/db/types";
 import { cleanEnvValue, parseEmailList, studentEmailAllowed } from "@/lib/env";
 import { adminEmailReason } from "@/lib/setup-status";
-import { formatHours, HOURS } from "@/config/options";
+import { formatHours, parseTimeRange, TIMES } from "@/config/options";
+import { v } from "@/lib/validation";
 
 describe("settings pasted into Vercel", () => {
   test.each([
@@ -64,10 +65,25 @@ test("admin sign-in email failures get a plain reason", () => {
   expect(adminEmailReason("something odd")).toMatch(/see the error/);
 });
 
-test("chosen hours are shown as ranges; old morning/afternoon choices still read", () => {
-  expect(HOURS.map((h) => h.code)).toEqual(["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]);
-  expect(formatHours(["11:00", "10:00", "15:00"], "en")).toBe("10:00–12:00, 15:00–16:00");
-  expect(formatHours(["20:00"], "he")).toBe("20:00–21:00");
+test("times are a from–until range or 'arrange by message'; old morning/afternoon choices still read", () => {
+  expect(TIMES[0]).toBe("08:00");
+  expect(TIMES[1]).toBe("08:30");
+  expect(TIMES.at(-1)).toBe("20:00");
+  expect(parseTimeRange("10:00-12:30")).toEqual({ from: "10:00", until: "12:30" });
+  expect(parseTimeRange("12:00-10:00")).toBeNull();
+  expect(parseTimeRange("07:00-09:00")).toBeNull();
+  expect(parseTimeRange("10:15-11:00")).toBeNull();
+  expect(formatHours(["10:00-12:30"], "en")).toBe("10:00–12:30");
+  expect(formatHours(["contact"], "he")).toBe("נתאם שעה בהודעה");
+  expect(formatHours(["contact"], "en")).toBe("Arrange the time by message");
   expect(formatHours([], "en")).toBe("");
   expect(formatHours(["morning"], "he")).toBe("בוקר");
+
+  const parse = (hours?: string) => v.timeChoice.safeParse(hours);
+  expect(parse("19:30-20:00").data).toEqual(["19:30-20:00"]);
+  expect(parse("contact").data).toEqual(["contact"]);
+  expect(parse("").data).toEqual([]);
+  expect(parse(undefined).data).toEqual([]);
+  expect(parse("20:00-21:00").success).toBe(false);
+  expect(parse("anything").success).toBe(false);
 });

@@ -78,6 +78,18 @@ export const CheckIcon = (p: Props) => (
   </Svg>
 );
 
+export const ChevronUpIcon = (p: Props) => (
+  <Svg {...p}>
+    <path d="M6 15l6-6 6 6" />
+  </Svg>
+);
+
+export const ChevronDownIcon = (p: Props) => (
+  <Svg {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+
 export const PrintIcon = (p: Props) => (
   <Svg {...p}>
     <path d="M6 9V2h12v7M6 18H4v-7h16v7h-2M6 14h12v8H6z" />

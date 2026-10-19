@@ -43,33 +43,43 @@ export const DAYS = [
   { code: "fri", en: "Fri", he: "שישי" },
 ] as const;
 
-/** Hours people can pick (each means that hour, e.g. "10:00" = 10:00–11:00). Edit the range here. */
-export const HOURS: Option[] = Array.from({ length: 13 }, (_, i) => {
-  const code = `${String(8 + i).padStart(2, "0")}:00`;
-  return { code, en: code, he: code };
+/** Times on the "from"/"until" wheels: every half hour from 08:00 to 20:00. Edit the range here. */
+export const TIMES: string[] = Array.from({ length: 25 }, (_, i) => {
+  const minutes = 8 * 60 + i * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${minutes % 60 ? "30" : "00"}`;
 });
 
-// requests saved before hours existed
+/** Stored instead of a time range when the person would rather arrange the time by message. */
+export const ARRANGE_BY_MESSAGE = "contact";
+
+export const DEFAULT_TIME_RANGE = "10:00-12:00";
+
+/** A time range code: "10:00-12:30" (both on the wheels, from before until). */
+export function parseTimeRange(code: string): { from: string; until: string } | null {
+  const m = /^(\d\d:\d\d)-(\d\d:\d\d)$/.exec(code);
+  if (!m || !TIMES.includes(m[1]) || !TIMES.includes(m[2]) || m[1] >= m[2]) return null;
+  return { from: m[1], until: m[2] };
+}
+
+export const isTimeChoice = (code: string) => code === ARRANGE_BY_MESSAGE || parseTimeRange(code) !== null;
+
+// requests saved before time ranges existed
 const LEGACY_DAY_PARTS: Option[] = [
   { code: "morning", en: "Morning", he: "בוקר" },
   { code: "afternoon", en: "Afternoon", he: "אחר הצהריים" },
 ];
 
-/** Chosen hours as ranges: ["10:00","11:00","15:00"] → "10:00–12:00, 15:00–16:00". */
+const ARRANGE_LABEL = { en: "Arrange the time by message", he: "נתאם שעה בהודעה" };
+
+/** Stored times for people to read: ["10:00-12:30"] → "10:00–12:30"; "contact" → "Arrange the time by message". */
 export function formatHours(codes: readonly string[], locale: "en" | "he"): string {
-  const hours = [...new Set(codes)]
-    .map((c) => (/^\d\d:00$/.test(c) ? Number(c.slice(0, 2)) : null))
-    .filter((h): h is number => h !== null)
-    .sort((a, b) => a - b);
-  const ranges: string[] = [];
-  for (let i = 0; i < hours.length; i++) {
-    const start = hours[i];
-    while (hours[i + 1] === hours[i] + 1) i++;
-    const pad = (h: number) => `${String(h).padStart(2, "0")}:00`;
-    ranges.push(`${pad(start)}–${pad(hours[i] + 1)}`);
-  }
-  const legacy = codes.filter((c) => !/^\d\d:00$/.test(c)).map((c) => optionLabel(LEGACY_DAY_PARTS, c, locale));
-  return [...ranges, ...legacy].join(", ");
+  return [...new Set(codes)]
+    .map((c) => {
+      if (c === ARRANGE_BY_MESSAGE) return ARRANGE_LABEL[locale];
+      const range = parseTimeRange(c);
+      return range ? `${range.from}–${range.until}` : optionLabel(LEGACY_DAY_PARTS, c, locale);
+    })
+    .join(", ");
 }
 
 export const MEMORIAL_ROLES = {

@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { DAYS, DIGITAL_NEEDS, formatHours, HOURS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, formatHours, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
 import { LANGUAGES } from "@/config/languages";
 import { eventForm, getCalendar, getEvent } from "@/lib/calendar";
 import * as digitalDb from "@/lib/db/digital";
@@ -96,10 +96,10 @@ export async function requestHelp(_: ActionState, fd: FormData): Promise<ActionS
       needs: v.codes(DIGITAL_NEEDS, { min: 1 }),
       needs_other: v.optionalText(300),
       days: v.codes(DAYS),
-      hours: v.codes(HOURS),
+      hours: v.timeChoice,
       language: v.language,
     });
-    const r = validate(schema, formObject(fd, ["needs", "days", "hours"]));
+    const r = validate(schema, formObject(fd, ["needs", "days"]));
     if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
     const res = await createDigital(
       db,
@@ -131,9 +131,9 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
       topics: v.codes(PODCAST_TOPICS, { min: 1 }),
       language: v.language,
       days: v.codes(DAYS),
-      hours: v.codes(HOURS),
+      hours: v.timeChoice,
     });
-    const r = validate(schema, formObject(fd, ["topics", "days", "hours"]));
+    const r = validate(schema, formObject(fd, ["topics", "days"]));
     if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
     const res = await joinPodcast(
       db,

@@ -1,5 +1,5 @@
 import { LANGUAGES } from "@/config/languages";
-import { DAYS, HOURS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
 import type { WizardStep } from "@/components/Wizard";
 import { eventForm, type CalendarEvent } from "@/lib/calendar/parse";
 import { residentsText, sharedText } from "@/lib/i18n";
@@ -38,7 +38,7 @@ const whenSteps: WizardStep[] = [
     id: "hours",
     title: f.hours,
     hint: f.hoursHint,
-    fields: [{ kind: "multi", name: "hours", options: opts(HOURS), columns: 2, optional: true }],
+    fields: [{ kind: "timerange", name: "hours" }],
   },
 ];
 

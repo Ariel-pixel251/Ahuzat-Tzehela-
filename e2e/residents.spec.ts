@@ -50,9 +50,24 @@ test("ask for help with the phone, then check the status by phone and code", asy
   await page.getByRole("button", { name: "שני" }).click();
   await next(page);
   await expect(page.getByRole("heading", { name: "באילו שעות נוח לכם?" })).toBeVisible();
-  await page.getByRole("button", { name: "10:00" }).click();
-  await page.getByRole("button", { name: "11:00" }).click();
-  // the hours fit the screen, also with bigger text
+  // two scroll wheels, also usable with the "earlier/later" buttons and the keyboard
+  const from = page.getByRole("spinbutton", { name: "משעה" });
+  const until = page.getByRole("spinbutton", { name: "עד שעה" });
+  await expect(from).toHaveAttribute("aria-valuetext", "10:00");
+  await expect(until).toHaveAttribute("aria-valuetext", "12:00");
+  await from.press("ArrowDown");
+  await expect(from).toHaveAttribute("aria-valuetext", "10:30");
+  await page.getByRole("button", { name: "מאוחר יותר" }).nth(1).click();
+  await expect(until).toHaveAttribute("aria-valuetext", "12:30");
+  // scrolling the wheel picks the time in the middle row
+  // (until options start at 11:00, so 13:30 is the 6th row)
+  await until.evaluate((el) => el.scrollTo({ top: 64 * 5, behavior: "instant" }));
+  await expect(until).toHaveAttribute("aria-valuetext", "13:30");
+  // "from" can't pass "until": at 13:30 the until wheel moves along to 14:30
+  for (let i = 0; i < 7; i++) await from.press("ArrowDown");
+  await expect(from).toHaveAttribute("aria-valuetext", "14:00");
+  await expect(until).toHaveAttribute("aria-valuetext", "14:30");
+  // the wheels fit the screen, also with bigger text
   for (const large of [false, true]) {
     if (large) await page.getByRole("button", { name: "הגדל טקסט" }).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
@@ -60,6 +75,7 @@ test("ask for help with the phone, then check the status by phone and code", asy
   await next(page);
   await next(page); // Hebrew is chosen already
   await contact(page, "שרה לוי", "052-765-4321");
+  await expect(page.getByText("14:00–14:30")).toBeVisible();
   await send(page);
   await expect(page.getByRole("heading", { name: "תודה! קיבלנו." })).toBeVisible();
   const code = (await page.getByText(/^\d{4}$/).textContent())!.trim();
@@ -69,6 +85,26 @@ test("ask for help with the phone, then check the status by phone and code", asy
   await page.getByLabel("קוד הבקשה").fill(code);
   await page.getByRole("button", { name: "בדיקה" }).click();
   await expect(page.getByText("ממתין למתנדב")).toBeVisible();
+});
+
+test("no fixed time: 'send me a message and we'll arrange a time'", async ({ page }) => {
+  await page.goto("/residents/help");
+  await page.getByRole("button", { name: "מחשב", exact: true }).click();
+  await next(page);
+  await next(page); // any day
+  const byMessage = page.getByRole("button", { name: "אין שעה קבועה? שלחו לי הודעה ונתאם" });
+  await byMessage.click();
+  await expect(byMessage).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("spinbutton")).toHaveCount(0);
+  await next(page);
+  await next(page);
+  await contact(page, "דוד כהן", "054-222-3344");
+  await expect(page.getByText("נתאם שעה בהודעה")).toBeVisible();
+  await send(page);
+  await expect(page.getByRole("heading", { name: "תודה! קיבלנו." })).toBeVisible();
+
+  await page.goto("/students/digital");
+  await expect(page.getByText("Arrange the time by message").first()).toBeVisible();
 });
 
 test("call me back, from the button on every page", async ({ page }) => {
