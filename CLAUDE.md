@@ -60,7 +60,7 @@ timetable_slots, announcements, leaders, leader_tasks, outbound_messages, settin
 | Editable lists | `config/languages.ts`, `config/options.ts` |
 | Resident wizard and its steps | `components/Wizard.tsx`, `lib/wizard-steps.ts` |
 | Student/admin forms | `components/forms.tsx` |
-| Email + SMS/WhatsApp queue | `lib/notify/` |
+| Email (SMTP e.g. Gmail app password, or Resend) + SMS/WhatsApp queue | `lib/notify/` |
 | Tests | `tests/` (Vitest, PGlite with the real migrations), `e2e/` (Playwright + axe, fixture calendar) |
 
 ### Common changes
