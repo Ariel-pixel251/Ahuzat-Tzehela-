@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { LANGUAGES } from "@/config/languages";
-import { DAY_PARTS, DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS, PROJECTS } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS, PROJECTS } from "@/config/options";
 import {
   adminEmails,
   DEV_ADMIN_COOKIE,
@@ -390,10 +390,10 @@ export async function registerOnBehalf(_: ActionState, fd: FormData): Promise<Ac
           needs: v.codes(DIGITAL_NEEDS, { min: 1 }),
           needs_other: v.optionalText(300),
           days: v.codes(DAYS),
-          parts: v.codes(DAY_PARTS),
+          hours: v.timeChoice,
           language: v.language,
         }),
-        formObject(fd, ["needs", "days", "parts"]),
+        formObject(fd, ["needs", "days"]),
       );
       if (!r.ok) return fail(r.errors);
       const res = await createDigital(
@@ -405,7 +405,7 @@ export async function registerOnBehalf(_: ActionState, fd: FormData): Promise<Ac
           needs: r.data.needs,
           needs_other: r.data.needs_other,
           preferred_days: r.data.days,
-          preferred_parts: r.data.parts,
+          preferred_parts: r.data.hours,
           language: r.data.language,
           registered_by,
         },

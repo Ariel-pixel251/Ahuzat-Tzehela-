@@ -1,6 +1,8 @@
 // Option lists for the podcast and digital-support forms. Edit freely;
 // `code` is what gets stored in the database.
 
+export type Option = { code: string; en: string; he: string };
+
 export const PODCAST_TOPICS = [
   { code: "life-story", en: "Life stories", he: "סיפורי חיים" },
   { code: "history", en: "History", he: "היסטוריה" },
@@ -41,10 +43,44 @@ export const DAYS = [
   { code: "fri", en: "Fri", he: "שישי" },
 ] as const;
 
-export const DAY_PARTS = [
+/** Times on the "from"/"until" wheels: every half hour from 08:00 to 20:00. Edit the range here. */
+export const TIMES: string[] = Array.from({ length: 25 }, (_, i) => {
+  const minutes = 8 * 60 + i * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${minutes % 60 ? "30" : "00"}`;
+});
+
+/** Stored instead of a time range when the person would rather arrange the time by message. */
+export const ARRANGE_BY_MESSAGE = "contact";
+
+export const DEFAULT_TIME_RANGE = "10:00-12:00";
+
+/** A time range code: "10:00-12:30" (both on the wheels, from before until). */
+export function parseTimeRange(code: string): { from: string; until: string } | null {
+  const m = /^(\d\d:\d\d)-(\d\d:\d\d)$/.exec(code);
+  if (!m || !TIMES.includes(m[1]) || !TIMES.includes(m[2]) || m[1] >= m[2]) return null;
+  return { from: m[1], until: m[2] };
+}
+
+export const isTimeChoice = (code: string) => code === ARRANGE_BY_MESSAGE || parseTimeRange(code) !== null;
+
+// requests saved before time ranges existed
+const LEGACY_DAY_PARTS: Option[] = [
   { code: "morning", en: "Morning", he: "בוקר" },
   { code: "afternoon", en: "Afternoon", he: "אחר הצהריים" },
-] as const;
+];
+
+const ARRANGE_LABEL = { en: "Arrange the time by message", he: "נתאם שעה בהודעה" };
+
+/** Stored times for people to read: ["10:00-12:30"] → "10:00–12:30"; "contact" → "Arrange the time by message". */
+export function formatHours(codes: readonly string[], locale: "en" | "he"): string {
+  return [...new Set(codes)]
+    .map((c) => {
+      if (c === ARRANGE_BY_MESSAGE) return ARRANGE_LABEL[locale];
+      const range = parseTimeRange(c);
+      return range ? `${range.from}–${range.until}` : optionLabel(LEGACY_DAY_PARTS, c, locale);
+    })
+    .join(", ");
+}
 
 export const MEMORIAL_ROLES = {
   resident: [
@@ -57,8 +93,6 @@ export const MEMORIAL_ROLES = {
     { code: "help", en: "Help organise", he: "לעזור בארגון" },
   ],
 } as const;
-
-export type Option = { code: string; en: string; he: string };
 
 export function optionLabel(list: readonly Option[], code: string, locale: "en" | "he") {
   return list.find((o) => o.code === code)?.[locale] ?? code;

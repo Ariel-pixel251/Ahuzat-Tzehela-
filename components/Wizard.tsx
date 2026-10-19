@@ -5,7 +5,9 @@ import { startTransition, useActionState, useEffect, useRef, useState } from "re
 import { residentsText as t, sharedText } from "@/lib/i18n";
 import { formatPhone, normalizePhone } from "@/lib/phone";
 import { HONEYPOT, type ActionState } from "@/lib/form";
+import { DEFAULT_TIME_RANGE, formatHours } from "@/config/options";
 import { CheckIcon } from "./icons";
+import { TimeRange } from "./TimeRange";
 import { buttonClass } from "./ui";
 
 // Resident forms: one question per screen, big choice buttons, a review screen, then a calm
@@ -35,7 +37,9 @@ export type WizardField =
       optional?: boolean;
       check?: "name" | "phone" | "email";
       autoComplete?: string;
-    };
+    }
+  /** "from"/"until" scroll wheels, or "arrange by message"; the value is "10:00-12:00" or "contact" */
+  | { kind: "timerange"; name: string; defaultValue?: string };
 
 export type WizardStep = { id: string; title: string; hint?: string; fields: WizardField[]; reviewLabel?: string };
 
@@ -51,6 +55,7 @@ function initialValues(steps: WizardStep[]): Values {
     for (const f of s.fields) {
       if (f.kind === "multi") v[f.name] = f.defaultValue ?? [];
       else if (f.kind === "choice") v[f.name] = f.defaultValue ?? "";
+      else if (f.kind === "timerange") v[f.name] = f.defaultValue ?? DEFAULT_TIME_RANGE;
       else v[f.name] = "";
     }
   return v;
@@ -82,6 +87,7 @@ function validateStep(step: WizardStep, values: Values): Record<string, string> 
 function display(field: WizardField, values: Values): { text: string; ltr: boolean } {
   const value = values[field.name];
   if (field.kind === "choice") return { text: field.options.find((o) => o.value === value)?.label ?? "", ltr: false };
+  if (field.kind === "timerange") return { text: formatHours([String(value)], "he"), ltr: false };
   if (field.kind === "multi") {
     return { text: field.options.filter((o) => (value as string[]).includes(o.value)).map((o) => o.label).join(", "), ltr: false };
   }
@@ -310,6 +316,8 @@ function FieldView({
     </p>
   ) : null;
 
+  if (field.kind === "timerange") return <TimeRange value={String(value)} onChange={onChange} />;
+
   if (field.kind === "text") {
     const common = {
       id: field.name,
@@ -380,12 +388,14 @@ function FieldView({
               aria-checked={multi ? undefined : on}
               aria-pressed={multi ? on : undefined}
               onClick={() => toggle(o.value)}
-              className={`flex min-h-16 items-center justify-between gap-3 rounded-xl border-4 px-5 py-3 text-start text-xl font-bold ${
+              // the check mark has a small fixed-size spot in the corner, so a selected button keeps
+              // its size and the label isn't squeezed (also with bigger text)
+              className={`relative flex min-h-16 min-w-0 items-center justify-center rounded-xl border-4 px-3 py-3 text-center text-xl font-bold ${
                 on ? "border-brand bg-brand text-white" : "border-ink bg-white text-ink hover:bg-sand"
               }`}
             >
-              <span>{o.label}</span>
-              {on && <CheckIcon className="size-6" />}
+              <span className="min-w-0 [overflow-wrap:anywhere] [word-break:keep-all]">{o.label}</span>
+              {on && <CheckIcon className="absolute end-[6px] top-[6px] size-[20px]" />}
             </button>
           );
         })}

@@ -1,5 +1,5 @@
 import { LANGUAGES } from "@/config/languages";
-import { DAY_PARTS, DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
 import type { WizardStep } from "@/components/Wizard";
 import { eventForm, type CalendarEvent } from "@/lib/calendar/parse";
 import { residentsText, sharedText } from "@/lib/i18n";
@@ -31,15 +31,16 @@ const languageStep = (title: string, name = "language"): WizardStep => ({
   fields: [{ kind: "choice", name, options: languageOptions, defaultValue: "he", columns: 2 }],
 });
 
-const whenStep: WizardStep = {
-  id: "when",
-  title: f.days,
-  reviewLabel: f.when,
-  fields: [
-    { kind: "multi", name: "days", options: opts(DAYS), columns: 2, optional: true },
-    { kind: "multi", name: "parts", label: f.parts, options: opts(DAY_PARTS), optional: true },
-  ],
-};
+// one question per screen: first the days, then the hours
+const whenSteps: WizardStep[] = [
+  { id: "days", title: f.days, fields: [{ kind: "multi", name: "days", options: opts(DAYS), columns: 2, optional: true }] },
+  {
+    id: "hours",
+    title: f.hours,
+    hint: f.hoursHint,
+    fields: [{ kind: "timerange", name: "hours" }],
+  },
+];
 
 export function eventSteps(event: CalendarEvent): WizardStep[] {
   const form = eventForm(event);
@@ -100,7 +101,7 @@ export const helpSteps: WizardStep[] = [
       { kind: "text", name: "needs_other", label: f.needsOther, optional: true },
     ],
   },
-  whenStep,
+  ...whenSteps,
   languageStep(f.language),
   contactStep(),
 ];
@@ -108,7 +109,7 @@ export const helpSteps: WizardStep[] = [
 export const podcastSteps: WizardStep[] = [
   { id: "topics", title: f.topics, hint: f.topicsHint, fields: [{ kind: "multi", name: "topics", options: opts(PODCAST_TOPICS) }] },
   languageStep(f.language),
-  whenStep,
+  ...whenSteps,
   contactStep(),
 ];
 

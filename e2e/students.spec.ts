@@ -5,7 +5,7 @@ test("a student signs in, takes a resident's request and sees the contact after 
   const resident = await browser.newPage({ viewport: { width: 360, height: 800 } });
   await resident.goto("/residents/help");
   await resident.getByRole("button", { name: "אימייל" }).click();
-  for (let i = 0; i < 3; i++) await resident.getByRole("button", { name: "הבא", exact: true }).click();
+  for (let i = 0; i < 4; i++) await resident.getByRole("button", { name: "הבא", exact: true }).click(); // days, hours, language
   await resident.getByLabel("שם", { exact: true }).fill("אסתר ישראלי");
   await resident.getByLabel("טלפון", { exact: true }).fill("058-111-2233");
   await resident.getByRole("button", { name: "הבא", exact: true }).click();

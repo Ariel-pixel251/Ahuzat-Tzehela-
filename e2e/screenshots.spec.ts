@@ -10,7 +10,8 @@ async function residentHelpRequest(page: Page, need: string, name: string, phone
   await page.getByRole("button", { name: need }).click();
   await page.getByRole("button", { name: "הבא", exact: true }).click();
   await page.getByRole("button", { name: "שלישי" }).click();
-  await page.getByRole("button", { name: "אחר הצהריים" }).click();
+  await page.getByRole("button", { name: "הבא", exact: true }).click();
+  await page.getByRole("button", { name: "מאוחר יותר" }).nth(1).click();
   await page.getByRole("button", { name: "הבא", exact: true }).click();
   await page.getByRole("button", { name: "הבא", exact: true }).click();
   await page.getByLabel("שם", { exact: true }).fill(name);

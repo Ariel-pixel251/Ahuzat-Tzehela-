@@ -26,6 +26,9 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - Vercel environment variables set: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ADMIN_EMAILS`, `CRON_SECRET`, `SITE_URL`.
 - Supabase Auth: Site URL and the redirect URL `https://ahuzattzehela.vercel.app/admin/auth/callback`.
+- Resident time choice (PR #6): "from"/"until" scroll wheels (08:00–20:00, half hours) or "send me a
+  message and we'll arrange a time". Stored in the existing `preferred_parts` column as `["10:00-12:00"]` or
+  `["contact"]`; no database change.
 
 ## Lessons from the first deploy
 

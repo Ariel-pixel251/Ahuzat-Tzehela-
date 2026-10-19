@@ -1,14 +1,13 @@
-import { DAY_PARTS, DAYS, DIGITAL_NEEDS, optionLabel } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, formatHours, optionLabel } from "@/config/options";
 import { languageName } from "@/config/languages";
 import type { PublicDigitalRequest } from "@/lib/db/digital";
 import { studentsText as t } from "@/lib/i18n";
 
 /** What a student sees about a request before taking it: no phone, no email, no surname. */
 export function DigitalRequestSummary({ r }: { r: Pick<PublicDigitalRequest, "needs" | "needs_other" | "language" | "preferred_days" | "preferred_parts"> }) {
-  const times = [
-    ...r.preferred_days.map((d) => optionLabel(DAYS, d, "en")),
-    ...r.preferred_parts.map((p) => optionLabel(DAY_PARTS, p, "en").toLowerCase()),
-  ].join(", ");
+  const times = [r.preferred_days.map((d) => optionLabel(DAYS, d, "en")).join(", "), formatHours(r.preferred_parts, "en")]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
       <dt className="font-bold">{t.digital.needs}</dt>

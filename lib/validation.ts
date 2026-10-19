@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isLanguageCode } from "@/config/languages";
+import { isTimeChoice } from "@/config/options";
 import { shared, type Shared } from "@/lib/i18n/en";
 import { HONEYPOT } from "@/lib/form";
 import { normalizePhone } from "@/lib/phone";
@@ -63,6 +64,13 @@ export const v = {
       .default([])
       .transform((list) => [...new Set(list)].filter((c) => allowed.some((a) => a.code === c)))
       .refine((list) => list.length >= min, "choose"),
+  /** One time range ("10:00-12:00") or "contact", stored as a list; empty means any time. */
+  timeChoice: z
+    .string()
+    .optional()
+    .transform((s) => s?.trim() ?? "")
+    .refine((s) => s === "" || isTimeChoice(s), "choose")
+    .transform((s) => (s ? [s] : [])),
   choice: <T extends string>(allowed: readonly T[]) => z.string().refine((s): s is T => allowed.includes(s as T), "choose"),
   int: (min: number, max: number) => z.coerce.number().int().min(min, "choose").max(max, "choose"),
   consent: z.literal("on", { message: "consent" }),

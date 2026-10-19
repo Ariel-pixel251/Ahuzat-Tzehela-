@@ -42,6 +42,16 @@ test("a wizard step passes axe too", async ({ page }) => {
   expect(results.violations.map((v) => v.id)).toEqual([]);
 });
 
+test("the time wheels pass axe", async ({ page }) => {
+  await page.goto("/residents/help");
+  await page.getByRole("button", { name: "וואטסאפ" }).click();
+  await page.getByRole("button", { name: "הבא", exact: true }).click();
+  await page.getByRole("button", { name: "הבא", exact: true }).click();
+  await expect(page.getByRole("spinbutton", { name: "משעה" })).toBeVisible();
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag2aaa"]).analyze();
+  expect(results.violations.map((v) => v.id)).toEqual([]);
+});
+
 // No horizontal scrolling at 360px, or at 200% zoom on a 1280px screen (= a 640px layout).
 for (const [label, viewport] of [
   ["360px", { width: 360, height: 800 }],
