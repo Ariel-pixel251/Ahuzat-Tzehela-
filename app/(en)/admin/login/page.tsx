@@ -29,7 +29,7 @@ export default async function AdminLogin({ searchParams }: { searchParams: Promi
           </form>
         </>
       ) : (
-        <Notice kind="bad">Admin sign-in is not configured: set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and ADMIN_EMAILS.</Notice>
+        <Notice kind="bad">Admin sign-in is not configured: set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and ADMIN_EMAILS.</Notice>
       )}
     </main>
   );

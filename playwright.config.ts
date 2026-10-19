@@ -24,6 +24,7 @@ export default defineConfig({
       GOOGLE_CALENDAR_ICS_URL: pathToFileURL(path.resolve("e2e/fixtures/calendar.ics")).href,
       DATABASE_URL: "",
       NEXT_PUBLIC_SUPABASE_URL: "",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
       RESEND_API_KEY: "",
     },

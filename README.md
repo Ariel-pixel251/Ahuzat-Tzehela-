@@ -54,9 +54,9 @@ With no environment values:
 | Variable | Secret? | Where to get it |
 | --- | --- | --- |
 | `GOOGLE_CALENDAR_ICS_URL` | no | Google Calendar → calendar settings → *Public address in iCal format*. Defaults to the Ahuzat Tzahala Events calendar. |
-| `DATABASE_URL` | **yes** | Supabase → your project → **Connect** → *Transaction pooler* connection string (port 6543), with the database password. |
-| `NEXT_PUBLIC_SUPABASE_URL` | no | Supabase → Project Settings → API → Project URL. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | no (public by design) | Supabase → Project Settings → API → `anon` key. Every table is closed to it. |
+| `DATABASE_URL` | **yes** | Supabase → **Connect** → **Direct** tab → Method: *Transaction pooler* (port 6543), with the database password. |
+| `NEXT_PUBLIC_SUPABASE_URL` | no | Supabase → **Connect** → Framework → Next.js (or Project Settings → API). |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | no (public by design) | Same place; starts with `sb_publishable_`. Every table is closed to it. (Older projects: `NEXT_PUBLIC_SUPABASE_ANON_KEY` with the `anon` key also works.) |
 | `ADMIN_EMAILS` | no | Comma-separated emails allowed into `/admin` (admins and leaders). |
 | `SITE_URL` | no | The site's public address, e.g. `https://ahuzat-tzahala.vercel.app`. |
 | `RESEND_API_KEY` | **yes** | resend.com → API Keys. |
@@ -95,7 +95,7 @@ To refresh the screenshots in `docs/screenshots`: `SCREENSHOTS=1 npx playwright 
 **How data is protected.** The site's server talks to Postgres directly through `DATABASE_URL`, as the
 privileged role (the equivalent of the service-role key), and never from the browser. Row Level Security is
 enabled on every table with no policies for the public roles, and their privileges are revoked. Nothing,
-including contact details, can be read or written with the public anon key. Public sign-ups go through
+including contact details, can be read or written with the public (publishable/anon) key. Public sign-ups go through
 server code that validates input (zod), checks the honeypot and rate-limits. Students and residents only
 ever see what the server chooses to show them (for example first names on the public boards).
 

@@ -15,8 +15,13 @@ export function isAdminEmail(email: string | null | undefined) {
   return Boolean(email) && adminEmails().includes(email!.toLowerCase());
 }
 
+/** Supabase's public key: the new "publishable" key, or the legacy "anon" key. */
+export function supabasePublicKey() {
+  return process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+}
+
 export function supabaseAuthConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && supabasePublicKey());
 }
 
 /** Local development without Supabase: a "dev sign-in" button (never in production). */
@@ -28,7 +33,7 @@ export const DEV_ADMIN_COOKIE = "dev_admin";
 
 export async function supabaseServer() {
   const store = await cookies();
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, supabasePublicKey()!, {
     cookies: {
       getAll: () => store.getAll(),
       setAll: (list) => {
