@@ -1,10 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
-import { adminSignIn, createSlot, inDays } from "./helpers";
+import { adminSignIn, createSlot } from "./helpers";
 
 // Regenerates docs/screenshots (mobile width). Run with: SCREENSHOTS=1 npx playwright test screenshots
 test.skip(!process.env.SCREENSHOTS, "set SCREENSHOTS=1 to update the screenshots");
 
-const shot = (page: Page, name: string, fullPage = true) => page.screenshot({ path: `docs/screenshots/${name}.png`, fullPage });
+// caret "initial": Playwright otherwise injects a style to hide the cursor, which the dev server reports as an issue
+const shot = (page: Page, name: string, fullPage = true) => page.screenshot({ path: `docs/screenshots/${name}.png`, fullPage, caret: "initial" });
+
+/** The next Tuesday at least 3 days away ("YYYY-MM-DD"). */
+function nextTuesday() {
+  const d = new Date(Date.now() + 3 * 86_400_000);
+  while (d.getUTCDay() !== 2) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 test("screenshots", async ({ page }) => {
   test.setTimeout(240_000);
@@ -12,9 +20,11 @@ test("screenshots", async ({ page }) => {
 
   // admin: the slot creation page (with a weekly series made through it)
   await adminSignIn(page);
-  await createSlot(page, { date: inDays(4), until: inDays(25), place: "בחדר הקהילה", placeEn: "Community room", residents: 4, helpers: 2 });
+  const first = nextTuesday();
+  const until = new Date(Date.parse(`${first}T00:00:00Z`) + 21 * 86_400_000).toISOString().slice(0, 10);
+  await createSlot(page, { date: first, until, place: "בחדר הקהילה", placeEn: "Community room", residents: 4, helpers: 2 });
   await page.goto("/admin/digital-support");
-  await page.locator("section", { has: page.getByRole("heading", { name: "Create slots" }) }).screenshot({ path: "docs/screenshots/admin-slot-creation.png" });
+  await page.locator("section", { has: page.getByRole("heading", { name: "Create slots" }) }).screenshot({ path: "docs/screenshots/admin-slot-creation.png", caret: "initial" });
 
   // landing and resident portal
   await page.goto("/");
