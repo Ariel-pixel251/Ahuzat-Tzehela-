@@ -10,6 +10,7 @@ import { currentStudent } from "@/lib/auth/student";
 import { listMyEventRegistrations } from "@/lib/db/events";
 import { getParticipantByEmail } from "@/lib/db/podcast";
 import { CONTACT_WINDOW_HOURS, listResidentsForVolunteer, listStudentSlots } from "@/lib/db/slots";
+import { isBlocked } from "@/lib/db/misc";
 import { profileComplete } from "@/lib/db/students";
 import { sharedText, studentsText as t } from "@/lib/i18n";
 import { formatDateTime, formatSlot } from "@/lib/i18n/format";
@@ -28,6 +29,7 @@ export default async function MySignUps() {
   if (!db) return <Notice kind="warn">{sharedText.en.errors.unavailable}</Notice>;
   const student = await currentStudent(db);
   if (!student) redirect("/students/sign-in");
+  if (await isBlocked(db, student.phone, student.email)) return <Notice kind="warn">{sharedText.en.errors.unavailable}</Notice>;
   const [slots, residents, registrations, podcast] = await Promise.all([
     listStudentSlots(db, student.id),
     listResidentsForVolunteer(db, student.id),

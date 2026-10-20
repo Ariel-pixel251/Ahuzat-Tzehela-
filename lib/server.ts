@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { headers } from "next/headers";
 import { deploymentEnv, readEnv } from "@/lib/env";
 import { getDb } from "@/lib/db/client";
@@ -26,11 +26,17 @@ export async function getBaseUrl() {
   return `${proto}://${host}`;
 }
 
-/** A hashed client identifier for rate limiting (never stored in clear). */
+/**
+ * A keyed hash of the client's address for rate limiting (never stored in clear, and not
+ * reversible without the server's secret). IPv6 addresses count per /64 network, since one
+ * device often controls a whole /64. On Vercel the platform sets these headers itself.
+ */
 export async function clientKey() {
   const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "unknown";
-  return createHash("sha256").update(ip).digest("hex").slice(0, 32);
+  let ip = h.get("x-real-ip")?.trim() || (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
+  if (ip.includes(":")) ip = ip.split(":").slice(0, 4).join(":") + "::/64";
+  const secret = readEnv("RATE_LIMIT_SECRET") || readEnv("CRON_SECRET") || "local-development";
+  return createHmac("sha256", secret).update(ip).digest("hex").slice(0, 32);
 }
 
 /** Rate limit per client: `max` submissions of `action` per `windowSeconds`. */
@@ -53,9 +59,17 @@ export function invalid(errors: FieldErrors, locale: Locale): ActionState {
  * Honeypot and rate limit for a public form. Returns a state to stop with, or null to go on.
  * Bots get a normal-looking answer and nothing is saved.
  */
-export async function guardForm(db: Db, fd: FormData, action: string, locale: Locale, { max = 10, windowSeconds = 600 } = {}): Promise<ActionState> {
+export async function guardForm(
+  db: Db,
+  fd: FormData,
+  action: string,
+  locale: Locale,
+  { max = 10, windowSeconds = 600, perDay }: { max?: number; windowSeconds?: number; perDay?: number } = {},
+): Promise<ActionState> {
   if (isBot(fd)) return { ok: true, code: locale === "he" ? "0000" : undefined };
   if (!(await allowed(db, action, max, windowSeconds))) return { ok: false, message: shared(locale).errors.rateLimited };
+  // a daily cap too, so one address can't fill an event or the slots with made-up sign-ups
+  if (perDay && !(await allowed(db, `${action}:day`, perDay, 86_400))) return { ok: false, message: shared(locale).errors.rateLimited };
   return null;
 }
 

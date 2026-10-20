@@ -91,7 +91,9 @@ describe("podcast pairs", () => {
     const pairId = (await podcast.makePair(db, a.id, b.id))!;
     expect(await podcast.listPendingRequests(db, c.id)).toHaveLength(0);
     await podcast.unpair(db, pairId);
-    expect((await podcast.listLooking(db)).map((p) => p.id).sort()).toEqual([a.id, b.id, c.id].sort());
+    // everyone is unpaired again (the public list shows only the students among them)
+    const people = await podcast.listParticipants(db);
+    expect(people.filter((p) => p.status !== "paired").map((p) => p.id).sort()).toEqual([a.id, b.id, c.id].sort());
   });
 
   test("the same email or phone can't sign up twice; anyone can pair, not only student+resident", async () => {
@@ -107,7 +109,8 @@ describe("podcast pairs", () => {
     const b = (await join("B", "resident", "0521111112"))!;
     await podcast.makePair(db, a.id, b.id);
     await podcast.withdraw(db, a.id);
-    expect((await podcast.listLooking(db)).map((p) => p.id)).toEqual([b.id]);
+    const people = await podcast.listParticipants(db);
+    expect(people.filter((p) => p.active && p.status !== "paired").map((p) => p.id)).toEqual([b.id]);
   });
 });
 
@@ -204,8 +207,9 @@ describe("tokens and request codes", () => {
     expect(await exchangeLoginToken(db, login)).toBeNull();
   });
 
-  test("asking for a sign-in link with someone's email doesn't change their details", async () => {
-    await upsertStudent(db, { name: "Dana Real", email: "dana@emis.test", phone: "0501111111" });
+  test("asking for a sign-in link with a signed-in student's email doesn't change their details", async () => {
+    const dana = await upsertStudent(db, { name: "Dana Real", email: "dana@emis.test", phone: "0501111111" });
+    await exchangeLoginToken(db, (await createLoginToken(db, dana.id))!);
     const again = await upsertStudent(db, { name: "Someone Else", email: "DANA@emis.test", phone: "0509999999" });
     expect(again).toMatchObject({ name: "Dana Real", phone: "0501111111" });
   });

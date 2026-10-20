@@ -74,6 +74,7 @@ export async function proxy(request: NextRequest) {
           for (const { name, value } of list) request.cookies.set(name, value);
           response = withCsp(request, nonce, csp);
           response.headers.set("Cache-Control", "no-store");
+          response.headers.set("X-Robots-Tag", "noindex");
           for (const { name, value, options } of list) response.cookies.set(name, value, options);
         },
       },

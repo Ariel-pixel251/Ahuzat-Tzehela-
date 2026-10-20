@@ -232,3 +232,18 @@ describe("weekly series, blocked dates and changes", () => {
     expect((await listMessages(db)).length).toBe(before + 2);
   });
 });
+
+describe("without a school-email rule in production, helpers wait for a leader", () => {
+  test("volunteering is 'pending', not confirmed", async () => {
+    const { vi } = await import("vitest");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("STUDENT_EMAIL_DOMAINS", "");
+    try {
+      const id = (await slots.createSlot(db, slotInput()))!;
+      const s = await student(1);
+      expect(await volunteerForSlot(db, id, s, BASE)).toBe("pending");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});

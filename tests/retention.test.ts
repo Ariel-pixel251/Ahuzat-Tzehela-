@@ -2,17 +2,16 @@ import { beforeEach, describe, expect, test } from "vitest";
 import * as events from "@/lib/db/events";
 import {
   clearCodeFailures,
-  codeLocked,
+  codeAttempt,
   createCallback,
   createProblemReport,
   deletePersonData,
   MAX_CODE_FAILURES,
   purgeOldData,
-  recordCodeFailure,
 } from "@/lib/db/misc";
 import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
-import { upsertStudent } from "@/lib/db/students";
+import { addStudentByAdmin, createLoginToken, exchangeLoginToken, getStudent, revokeStudent, saveProfile, upsertStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
 import { testDb } from "./helpers/db";
 
@@ -142,25 +141,75 @@ describe("delete all data for a person", () => {
 });
 
 describe("4-digit code lockout", () => {
-  test(`${MAX_CODE_FAILURES} wrong codes lock the phone number; a right code before that clears the count`, async () => {
+  test(`more than ${MAX_CODE_FAILURES} tries without a right code lock the phone; a right code clears the count`, async () => {
     const phone = "0501234567";
-    for (let i = 0; i < MAX_CODE_FAILURES - 1; i++) await recordCodeFailure(db, phone);
-    expect(await codeLocked(db, phone)).toBe(false);
+    for (let i = 0; i < MAX_CODE_FAILURES; i++) expect(await codeAttempt(db, phone)).toBe(true);
     await clearCodeFailures(db, phone);
-    for (let i = 0; i < MAX_CODE_FAILURES - 1; i++) await recordCodeFailure(db, phone);
-    expect(await codeLocked(db, phone)).toBe(false);
-    await recordCodeFailure(db, phone);
-    expect(await codeLocked(db, phone)).toBe(true);
+    for (let i = 0; i < MAX_CODE_FAILURES; i++) expect(await codeAttempt(db, phone)).toBe(true);
+    expect(await codeAttempt(db, phone)).toBe(false);
+    expect(await codeAttempt(db, phone)).toBe(false);
     // other numbers are not affected
-    expect(await codeLocked(db, "0509999999")).toBe(false);
+    expect(await codeAttempt(db, "0509999999")).toBe(true);
+  });
+
+  test("parallel tries can't get past the limit (the try is counted before the lookup)", async () => {
+    const results = await Promise.all(Array.from({ length: 30 }, () => codeAttempt(db, "0507777777")));
+    expect(results.filter(Boolean)).toHaveLength(MAX_CODE_FAILURES);
   });
 
   test("the lock ends after its time", async () => {
     const phone = "0501234567";
-    for (let i = 0; i < MAX_CODE_FAILURES; i++) await recordCodeFailure(db, phone);
+    for (let i = 0; i <= MAX_CODE_FAILURES; i++) await codeAttempt(db, phone);
+    expect(await codeAttempt(db, phone)).toBe(false);
     await db.query(`update code_lockouts set locked_until = now() - interval '1 minute' where phone = $1`, [phone]);
-    expect(await codeLocked(db, phone)).toBe(false);
-    await recordCodeFailure(db, phone);
-    expect(await codeLocked(db, phone)).toBe(false);
+    expect(await codeAttempt(db, phone)).toBe(true);
+  });
+});
+
+describe("students: verification, blocking, retention", () => {
+  test("before signing in, a later request's name replaces an earlier one; after, nobody can change it", async () => {
+    await upsertStudent(db, { name: "Prank Name", email: "dana@emis.test", phone: null });
+    const real = await upsertStudent(db, { name: "Dana Real", email: "dana@emis.test", phone: null });
+    expect(real.name).toBe("Dana Real");
+    await exchangeLoginToken(db, (await createLoginToken(db, real.id))!);
+    expect((await upsertStudent(db, { name: "Prank Again", email: "DANA@emis.test", phone: null })).name).toBe("Dana Real");
+  });
+
+  test("blocking signs a student out and cancels their places", async () => {
+    const s = await upsertStudent(db, { name: "Bad Actor", email: "bad@emis.test", phone: null });
+    const session = (await exchangeLoginToken(db, (await createLoginToken(db, s.id))!))!;
+    const id = (await slot(daysAgo(-3)))!;
+    await slots.volunteer(db, id, s.id, { autoApprove: true });
+    expect(await revokeStudent(db, { email: "BAD@emis.test", phone: null })).toBe(1);
+    const { getStudentBySession } = await import("@/lib/db/students");
+    expect(await getStudentBySession(db, session.token)).toBeNull();
+    expect(await slots.listStudentSlots(db, s.id)).toHaveLength(0);
+  });
+
+  test("deleting a parent's data removes it from their child's profile", async () => {
+    const s = await upsertStudent(db, { name: "Kid", email: "kid@emis.test", phone: null });
+    await saveProfile(db, s.id, { phone: null, age_group: "under-18", guardian_name: "Parent", guardian_phone: "0546665544" });
+    const result = await deletePersonData(db, "0546665544", null);
+    expect(result.guardian_details).toBe(1);
+    expect(await getStudent(db, s.id)).toMatchObject({ guardian_name: null, guardian_phone: null, age_group: null });
+  });
+
+  test("reports are matched by an email or phone typed inside the contact text", async () => {
+    await createProblemReport(db, { portal: "student", name: null, contact: "email me: Dana@Emis.test please", message: "x" });
+    await createProblemReport(db, { portal: "student", name: null, contact: "call 054-666-5544", message: "y" });
+    await createProblemReport(db, { portal: "student", name: null, contact: "someone else", message: "z" });
+    expect((await deletePersonData(db, "0546665544", "dana@emis.test")).problem_reports).toBe(2);
+    expect(await count("problem_reports")).toBe(1);
+  });
+
+  test("students who aren't signed in and have no slot place are deleted after 30 days", async () => {
+    const idle = await addStudentByAdmin(db, { name: "Idle", email: null, phone: null, added_by: "admin" });
+    const placed = await addStudentByAdmin(db, { name: "Placed", email: null, phone: null, added_by: "admin" });
+    const s = (await slot(daysAgo(-3)))!;
+    await slots.volunteer(db, s, placed, { autoApprove: true });
+    await db.query(`update students set created_at = now() - interval '31 days'`);
+    await purgeOldData(db);
+    expect(await getStudent(db, idle)).toBeNull();
+    expect(await getStudent(db, placed)).not.toBeNull();
   });
 });

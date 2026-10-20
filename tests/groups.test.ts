@@ -82,3 +82,12 @@ describe("helpers added by an admin", () => {
     expect((await getStudent(db, first))?.name).toBe("Dana");
   });
 });
+
+describe("the public podcast list", () => {
+  test("shows students only; residents are paired by the team", async () => {
+    await podcast.joinPodcast(db, { name: "Rivka", email: null, phone: "0501112222", portal: "resident", topics: [], language: "he", availability: null, registered_by: null });
+    await podcast.joinPodcast(db, { name: "Dana", email: "dana@emis.test", phone: null, portal: "student", topics: [], language: "en", availability: null, registered_by: null });
+    const listed = await podcast.listLooking(db);
+    expect(listed.map((p) => p.first_name)).toEqual(["Dana"]);
+  });
+});

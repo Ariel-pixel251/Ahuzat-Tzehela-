@@ -18,8 +18,9 @@ export function PodcastSignup() {
       success={(s) => (
         <Notice kind="ok">
           <p className="font-bold">{t.podcast.joined}</p>
-          {(s.data as { link?: string })?.link && (
-            <ButtonLink href={(s.data as { link: string }).link} className="mt-3">
+          {/* local development only (no email): the link is shown instead of emailed */}
+          {(s.data as { devLink?: string } | undefined)?.devLink && (
+            <ButtonLink href={(s.data as { devLink: string }).devLink} className="mt-3">
               {t.podcast.openPage}
             </ButtonLink>
           )}

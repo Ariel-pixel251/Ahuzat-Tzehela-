@@ -7,16 +7,18 @@ import { getParticipantByToken, getPartner, listLooking, listPendingRequests } f
 import { studentsText as t } from "@/lib/i18n";
 import { formatPhone } from "@/lib/phone";
 import { tryDb } from "@/lib/server";
+import { v } from "@/lib/validation";
 
 export const metadata: Metadata = { title: t.podcast.manageTitle, robots: { index: false } };
 export const dynamic = "force-dynamic";
 
 /** Private podcast page (link emailed at sign-up): request a partner, answer requests. */
-export default async function PodcastManage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const { token = "" } = await searchParams;
+export default async function PodcastManage({ searchParams }: { searchParams: Promise<{ token?: string | string[] }> }) {
+  const parsed = v.token.safeParse((await searchParams).token);
   const db = await tryDb();
-  const me = db && token ? await getParticipantByToken(db, token) : null;
-  if (!db || !me || !me.active) return <Notice kind="bad">{t.podcast.invalid}</Notice>;
+  const me = db && parsed.success ? await getParticipantByToken(db, parsed.data) : null;
+  if (!db || !me || !me.active || !parsed.success) return <Notice kind="bad">{t.podcast.invalid}</Notice>;
+  const token = parsed.data;
   const [partner, requests, looking] = await Promise.all([getPartner(db, me.id), listPendingRequests(db, me.id), listLooking(db)]);
   const others = looking.filter((p) => p.id !== me.id);
   const outgoing = new Set(requests.filter((r) => r.direction === "out").map((r) => r.other_id));

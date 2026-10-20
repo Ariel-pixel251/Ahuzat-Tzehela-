@@ -65,10 +65,14 @@ export async function getParticipantByToken(db: Db, rawToken: string) {
 }
 
 /** Active people not yet in a pair (status looking or requested). */
+/**
+ * Students on the "looking for a partner" list (first names and interests only). Residents are not
+ * listed publicly: the team pairs them.
+ */
 export const listLooking = (db: Db) =>
   db.query<PublicParticipant>(
     `select id, first_name, portal, topics, language, availability, status
-       from podcast_people where active and pair_id is null order by created_at`,
+       from podcast_people where active and pair_id is null and portal = 'student' order by created_at`,
   );
 
 export const listParticipants = (db: Db) => db.query<Participant>(`select * from podcast_people order by created_at`);

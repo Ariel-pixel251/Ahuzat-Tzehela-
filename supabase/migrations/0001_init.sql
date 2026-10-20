@@ -59,6 +59,27 @@ create table code_lockouts (
   updated_at timestamptz not null default now()
 );
 
+-- Counts a code attempt for a phone number BEFORE the lookup, in one atomic step, so many requests
+-- at the same moment can't get past the limit. Returns false when the phone is locked (more than
+-- p_max attempts without a right code); the lock lasts p_lock_hours. A right code clears the count.
+create function code_attempt(p_phone text, p_max int, p_lock_hours int) returns boolean
+language plpgsql set search_path = public, pg_temp as $$
+declare r code_lockouts;
+begin
+  insert into code_lockouts (phone, failures) values (p_phone, 1)
+  on conflict (phone) do update set
+    failures = case when code_lockouts.locked_until < now() then 1 else code_lockouts.failures + 1 end,
+    locked_until = case when code_lockouts.locked_until < now() then null else code_lockouts.locked_until end,
+    updated_at = now()
+  returning * into r;
+  if r.locked_until is not null then return false; end if;
+  if r.failures > p_max then
+    update code_lockouts set locked_until = now() + make_interval(hours => p_lock_hours) where phone = p_phone;
+    return false;
+  end if;
+  return true;
+end $$;
+
 -- Messages for people without email (SMS/WhatsApp), sent by hand from the admin area
 -- until an SMS provider is connected.
 create table outbound_messages (
@@ -236,6 +257,8 @@ create table students (
   email text check (char_length(email) between 3 and 200),
   phone text check (char_length(phone) <= 20),
   added_by text check (char_length(added_by) <= 200),
+  -- set the first time the student opens a sign-in link (proves they own the email)
+  verified_at timestamptz,
   age_group text check (age_group in ('under-18', '18-plus')),
   guardian_name text check (char_length(guardian_name) <= 100),
   guardian_phone text check (char_length(guardian_phone) <= 20),
@@ -556,6 +579,8 @@ end $$;
 create function podcast_request_pair(p_from uuid, p_to uuid) returns text
 language plpgsql set search_path = public, pg_temp as $$
 begin
+  -- lock both people (in id order), so two people asking each other at once are paired, not stuck
+  perform 1 from podcast_participants where id in (p_from, p_to) order by id for update;
   if p_from = p_to
      or (select count(*) from podcast_participants where id in (p_from, p_to) and active) <> 2
      or exists (select 1 from podcast_pair_members where participant_id in (p_from, p_to)) then
@@ -651,6 +676,15 @@ begin
   delete from outbound_messages
    where (status = 'sent' and sent_at < now() - interval '30 days') or created_at < now() - interval '90 days';
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('outbound_messages', n);
+  -- students who aren't signed in and have no place in a slot: 30 days after their last activity
+  delete from students st
+   where st.created_at < now() - interval '30 days'
+     and not exists (select 1 from student_tokens t where t.student_id = st.id and t.expires_at > now())
+     and not exists (select 1 from digital_volunteers v where v.student_id = st.id);
+  get diagnostics n = row_count; v_out := v_out || jsonb_build_object('students_inactive', n);
+  -- podcast sign-ups: one year after signing up
+  delete from podcast_participants where created_at < now() - interval '365 days';
+  get diagnostics n = row_count; v_out := v_out || jsonb_build_object('podcast_old', n);
   delete from problem_reports where created_at < now() - interval '365 days';
   delete from audit_log where at < now() - interval '730 days';
   delete from rate_limits where window_start < now() - interval '1 day';
@@ -684,7 +718,14 @@ begin
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('outbound_messages', n);
   delete from students where lower(email) = v_email or phone = v_phone;
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('students', n);
-  delete from problem_reports where lower(contact) = v_email or contact = v_phone;
+  -- the person as a student's parent or guardian: remove their details from that student
+  update students set guardian_name = null, guardian_phone = null, guardian_confirmed_at = null, age_group = null
+   where guardian_phone = v_phone;
+  get diagnostics n = row_count; v_out := v_out || jsonb_build_object('guardian_details', n);
+  -- reports where they left their contact (students type it freely, so match inside the text)
+  delete from problem_reports
+   where (v_email is not null and position(v_email in lower(coalesce(contact, ''))) > 0)
+      or (v_phone is not null and position(v_phone in regexp_replace(coalesce(contact, ''), '[^0-9+]', '', 'g')) > 0);
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('problem_reports', n);
   delete from code_lockouts where phone = v_phone;
   return v_out;

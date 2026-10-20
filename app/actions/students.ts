@@ -92,14 +92,18 @@ export async function joinPodcastAsStudent(_: ActionState, fd: FormData): Promis
     });
     const r = validate(schema, formObject(fd, ["topics"]));
     if (!r.ok) return invalid(r.errors, "en");
+    const domains = studentEmailDomains();
+    if (!studentEmailAllowed(r.data.email, domains)) {
+      return { ok: false, errors: { email: t.signIn.schoolEmailOnly(domains.map((x) => `@${x}`).join(", ")) } };
+    }
     const d = r.data;
     const input = { name: d.name, email: d.email, phone: d.phone, topics: d.topics, language: d.language, availability: d.availability };
     const res = await joinPodcast(db, { ...input, portal: "student", registered_by: null }, await getBaseUrl());
     if (res === "blocked") return { ok: false, message: en.unavailable };
     if (!res) return { ok: false, message: en.alreadyJoined };
     revalidatePath("/students/podcast");
-    // the private link is also shown on screen to the person who just signed up
-    return { ok: true, data: { link: `/students/podcast/manage?token=${res.token}` } };
+    // the private link goes only to the inbox (owning the email is the proof); on screen only in local development
+    return { ok: true, data: process.env.NODE_ENV !== "production" ? { devLink: `/students/podcast/manage?token=${res.token}` } : undefined };
   });
 }
 
@@ -117,6 +121,9 @@ export async function askToPair(_: ActionState, fd: FormData): Promise<ActionSta
     const me = await participantFromToken(db, fd);
     const target = v.uuid.safeParse(fd.get("target"));
     if (!me || !target.success) return { ok: false, message: t.podcast.invalid };
+    // students ask students; residents are paired by the team (so nobody can message residents)
+    const other = await podcastDb.getParticipant(db, target.data);
+    if (!other || other.portal !== "student") return { ok: false, message: t.podcast.unavailable };
     const result = await requestPodcastPair(db, me.id, target.data);
     revalidatePath("/students/podcast/manage");
     const messages = {

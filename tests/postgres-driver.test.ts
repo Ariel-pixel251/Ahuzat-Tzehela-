@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import * as events from "@/lib/db/events";
-import { audit, codeLocked, deletePersonData, getSetting, hitRateLimit, listAudit, lookupStatus, purgeOldData, recordCodeFailure, setSetting } from "@/lib/db/misc";
+import { audit, codeAttempt, deletePersonData, getSetting, hitRateLimit, listAudit, lookupStatus, purgeOldData, setSetting } from "@/lib/db/misc";
 import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
 import { acceptConduct, addStudentByAdmin, saveProfile, upsertStudent } from "@/lib/db/students";
@@ -73,8 +73,8 @@ test("slots: create, book (a JSON parameter with a list), volunteer and the cont
 test("audit log, lockout, retention and delete-a-person through the driver", async () => {
   await audit(db, "admin@test", "export", "digital", { rows: 3 });
   expect((await listAudit(db))[0]).toMatchObject({ actor: "admin@test", details: { rows: 3 } });
-  for (let i = 0; i < 5; i++) await recordCodeFailure(db, "0500000009");
-  expect(await codeLocked(db, "0500000009")).toBe(true);
+  for (let i = 0; i < 5; i++) expect(await codeAttempt(db, "0500000009")).toBe(true);
+  expect(await codeAttempt(db, "0500000009")).toBe(false);
   expect(typeof (await purgeOldData(db)).event_registrations).toBe("number");
   expect((await deletePersonData(db, "0501234567", null)).digital_bookings).toBe(1);
 });

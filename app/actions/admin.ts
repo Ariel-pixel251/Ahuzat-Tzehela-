@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { LANGUAGES } from "@/config/languages";
 import { DIGITAL_NEEDS, PODCAST_TOPICS, PROJECTS } from "@/config/options";
-import { addStudentByAdmin } from "@/lib/db/students";
+import { addStudentByAdmin, revokeStudent } from "@/lib/db/students";
 import { adminEmails, DEV_ADMIN_COOKIE, devLoginAllowed, getAdmin, isAdminEmail, supabaseAuthConfigured, supabaseServer } from "@/lib/auth/admin";
 import { eventForm, getEvent } from "@/lib/calendar";
 import { getDb } from "@/lib/db/client";
@@ -453,6 +453,8 @@ export async function blockContactAction(_: ActionState, fd: FormData): Promise<
     if (!r.data.phone && !r.data.email) return { ok: false, message: "Enter a phone number or an email." };
     if (r.data.phone) await misc.blockContact(db, { kind: "phone", value: r.data.phone, reason: r.data.reason, blocked_by: admin.email });
     if (r.data.email) await misc.blockContact(db, { kind: "email", value: r.data.email, reason: r.data.reason, blocked_by: admin.email });
+    // takes effect at once: signed out everywhere, places in slots cancelled
+    await revokeStudent(db, { email: r.data.email, phone: r.data.phone });
     // the audit log never holds the person's phone or email
     await misc.audit(db, admin.email, "person.block", null, { phone: Boolean(r.data.phone), email: Boolean(r.data.email) });
     return done("Blocked. They can't sign up or volunteer any more.");

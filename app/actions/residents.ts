@@ -5,7 +5,7 @@ import { DAYS, DIGITAL_NEEDS, formatHours, PODCAST_TOPICS } from "@/config/optio
 import { LANGUAGES } from "@/config/languages";
 import { eventForm, getCalendar, getEvent } from "@/lib/calendar";
 import * as eventsDb from "@/lib/db/events";
-import { clearCodeFailures, codeLocked, createCallback, createProblemReport, isBlocked, lookupStatus, recordCodeFailure } from "@/lib/db/misc";
+import { clearCodeFailures, codeAttempt, createCallback, createProblemReport, isBlocked, lookupStatus } from "@/lib/db/misc";
 import * as slotsDb from "@/lib/db/slots";
 import { bookDigital, cancelEventRegistration, joinPodcast, registerEvent } from "@/lib/domain";
 import type { ActionState } from "@/lib/form";
@@ -27,7 +27,7 @@ function availabilityText(days: string[], hours: string[]) {
 
 export async function registerResidentForEvent(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const stop = await guardForm(db, fd, "residents:event", "he");
+    const stop = await guardForm(db, fd, "residents:event", "he", { perDay: 20 });
     if (stop) return stop;
     const key = v.eventKey.safeParse(fd.get("event"));
     const event = key.success ? await getEvent(key.data) : null;
@@ -75,7 +75,7 @@ export async function registerResidentForEvent(_: ActionState, fd: FormData): Pr
 
 export async function bookHelpSlot(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const stop = await guardForm(db, fd, "residents:help", "he");
+    const stop = await guardForm(db, fd, "residents:help", "he", { perDay: 10 });
     if (stop) return stop;
     const schema = form({
       ...contact,
@@ -183,12 +183,10 @@ export async function checkStatus(_: ActionState, fd: FormData): Promise<ActionS
     if (!(await allowed(db, "residents:status", 10, 3600))) return { ok: false, message: he.rateLimited };
     const r = validate(form({ phone: v.phone(), code: z.string().trim().regex(/^\d{4}$/, "text") }), formObject(fd));
     if (!r.ok) return invalid(r.errors, "he");
-    if (await codeLocked(db, r.data.phone)) return { ok: false, message: he.locked };
+    // the attempt is counted first, so parallel requests can't get past the limit
+    if (!(await codeAttempt(db, r.data.phone))) return { ok: false, message: he.locked };
     const items = await lookupStatus(db, r.data.phone, r.data.code);
-    if (!items.length) {
-      await recordCodeFailure(db, r.data.phone);
-      return { ok: false, message: residentsText.pages.status.notFound };
-    }
+    if (!items.length) return { ok: false, message: residentsText.pages.status.notFound };
     await clearCodeFailures(db, r.data.phone);
     return { ok: true, data: items };
   });

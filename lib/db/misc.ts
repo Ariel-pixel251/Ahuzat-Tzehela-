@@ -71,27 +71,15 @@ export const toggleCallbackHandled = (db: Db, id: string) =>
 export const MAX_CODE_FAILURES = 5;
 export const CODE_LOCK_HOURS = 24;
 
-export async function codeLocked(db: Db, phone: string) {
-  const [row] = await db.query<{ locked: boolean }>(
-    `select exists (select 1 from code_lockouts where phone = $1 and locked_until > now()) as locked`,
-    [phone],
-  );
-  return row.locked;
+/**
+ * Counts a code attempt for this phone BEFORE looking the code up (one atomic step, so parallel
+ * requests can't slip past). False means locked: more than MAX_CODE_FAILURES tries without a right
+ * code, for CODE_LOCK_HOURS. Call clearCodeFailures after a right code.
+ */
+export async function codeAttempt(db: Db, phone: string) {
+  const [row] = await db.query<{ ok: boolean }>(`select code_attempt($1, $2::int, $3::int) as ok`, [phone, MAX_CODE_FAILURES, CODE_LOCK_HOURS]);
+  return row.ok;
 }
-
-/** Counts a wrong code for this phone; the 5th wrong code locks it for CODE_LOCK_HOURS. */
-export const recordCodeFailure = (db: Db, phone: string) =>
-  db.query(
-    `insert into code_lockouts (phone, failures) values ($1, 1)
-     on conflict (phone) do update set
-       failures = case when code_lockouts.locked_until < now() then 1 else code_lockouts.failures + 1 end,
-       locked_until = case
-         when code_lockouts.locked_until < now() then null
-         when code_lockouts.failures + 1 >= $2::int then now() + make_interval(hours => $3::int)
-         else code_lockouts.locked_until end,
-       updated_at = now()`,
-    [phone, MAX_CODE_FAILURES, CODE_LOCK_HOURS],
-  );
 
 export const clearCodeFailures = (db: Db, phone: string) => db.query(`delete from code_lockouts where phone = $1`, [phone]);
 

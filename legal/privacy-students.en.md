@@ -26,7 +26,8 @@ We don't ask for ID numbers, addresses or health details.
 - Event registrations: deleted 90 days after the event.
 - Digital support bookings and volunteer places: deleted 90 days after the slot.
 - Cancelled sign-ups and call-back requests: deleted after 30 days.
-- Problem reports: deleted after one year.
+- Your student account: deleted 30 days after you were last signed in, unless you have a place in a slot.
+- Podcast sign-ups and problem reports: deleted after one year.
 
 ## Your rights
 

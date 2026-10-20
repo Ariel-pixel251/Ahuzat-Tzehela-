@@ -133,7 +133,7 @@ export const students = {
     language: "Preferred language",
     availability: "Availability",
     availabilityHint: "e.g. Tuesdays after school",
-    joined: "You're signed up! We've emailed you a private link to your podcast page, where you can ask someone to pair with you.",
+    joined: "You're signed up! We've emailed you a private link to your podcast page, where you can ask another student to pair with you, or wait for the team to pair you with a resident.",
     openPage: "Open my podcast page",
     lookingTitle: "Looking for a partner",
     lookingNone: "Nobody is waiting right now.",

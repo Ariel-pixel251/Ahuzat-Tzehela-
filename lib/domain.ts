@@ -11,6 +11,7 @@ import type { Locale } from "@/lib/i18n";
 import { notify, type Recipient } from "@/lib/notify";
 import { templates } from "@/lib/notify/templates";
 import { formatPhone } from "@/lib/phone";
+import { studentEmailDomains } from "@/lib/env";
 
 // Business logic shared by the portals and the admin screens.
 
@@ -185,7 +186,9 @@ export async function studentCancelCutoffHours(db: Db) {
 /** A student volunteers for a slot (atomically, within the number of helpers needed). */
 export async function volunteerForSlot(db: Db, slotId: string, s: { id: string; name: string; email: string | null; phone: string | null }, baseUrl: string) {
   if (await misc.isBlocked(db, s.phone, s.email)) return "blocked" as const;
-  const result = await slots.volunteer(db, slotId, s.id, { autoApprove: !(await helperApprovalRequired(db)) });
+  // without a school-email rule anyone could sign in, so in production a leader then approves every helper
+  const openSignIn = studentEmailDomains().length === 0 && process.env.NODE_ENV === "production";
+  const result = await slots.volunteer(db, slotId, s.id, { autoApprove: !openSignIn && !(await helperApprovalRequired(db)) });
   if (result === "confirmed" || result === "pending") {
     const slot = await slots.getSlot(db, slotId);
     if (slot) {
