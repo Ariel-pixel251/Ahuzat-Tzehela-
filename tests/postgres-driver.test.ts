@@ -1,10 +1,11 @@
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import * as digital from "@/lib/db/digital";
 import * as events from "@/lib/db/events";
-import { getSetting, hitRateLimit, lookupStatus, setSetting } from "@/lib/db/misc";
+import { audit, codeLocked, deletePersonData, getSetting, hitRateLimit, listAudit, lookupStatus, purgeOldData, recordCodeFailure, setSetting } from "@/lib/db/misc";
 import * as podcast from "@/lib/db/podcast";
+import * as slots from "@/lib/db/slots";
+import { acceptConduct, addStudentByAdmin, saveProfile, upsertStudent } from "@/lib/db/students";
 import { postgresDb } from "@/lib/db/postgres";
 import type { Db } from "@/lib/db/types";
 import { applyMigrations } from "@/lib/db/migrate";
@@ -21,7 +22,7 @@ let end: () => Promise<void>;
 
 beforeAll(async () => {
   pg = new PGlite();
-  await applyMigrations(pg, { seed: true });
+  await applyMigrations(pg);
   server = new PGLiteSocketServer({ db: pg, port: PORT, host: "127.0.0.1" });
   await server.start();
   ({ db, end } = postgresDb(`postgres://postgres:postgres@127.0.0.1:${PORT}/postgres`, { max: 1, ssl: false }));
@@ -33,20 +34,49 @@ afterAll(async () => {
   await pg?.close();
 });
 
-test("lists (needs, days) are saved as lists", async () => {
-  const { id } = await digital.createDigitalRequest(db, {
-    resident_name: "רבקה כהן",
-    resident_phone: "0501234567",
-    resident_email: null,
-    needs: ["whatsapp", "banking"],
-    needs_other: null,
-    preferred_days: ["sun", "tue"],
-    preferred_parts: ["morning"],
-    language: "he",
-    registered_by: null,
-  });
-  const row = await digital.getDigitalRequest(db, id);
-  expect(row).toMatchObject({ needs: ["whatsapp", "banking"], preferred_days: ["sun", "tue"], preferred_parts: ["morning"] });
+test("slots: create, book (a JSON parameter with a list), volunteer and the contact rule", async () => {
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const id = (await slots.createSlot(db, {
+    slot_date: tomorrow,
+    start_time: "16:00",
+    end_time: "17:30",
+    place_he: "בחדר הקהילה",
+    place_en: null,
+    resident_places: 2,
+    helpers_needed: 1,
+    note_en: null,
+    note_he: null,
+    booking_open: true,
+    closes_hours_before: null,
+  }))!;
+  const res = await slots.bookSlot(db, id, { name: "רבקה כהן", phone: "0501234567", email: null, needs: ["whatsapp", "banking"], needs_other: null, registered_by: null });
+  expect(res.status).toBe("booked");
+  const slot = (await slots.getSlot(db, id))!;
+  expect(slot).toMatchObject({ slot_date: tomorrow, booked: 1, booking_open: true, closes_hours_before: null });
+  expect(slot.starts_at).toBeInstanceOf(Date);
+
+  const s = await upsertStudent(db, { name: "Dana", email: "dana@emis.test", phone: null });
+  await saveProfile(db, s.id, { phone: null, age_group: "under-18", guardian_name: "Parent", guardian_phone: "0509999999" });
+  expect(await slots.volunteer(db, id, s.id, { autoApprove: true })).toBe("confirmed");
+  await acceptConduct(db, s.id);
+  const [r] = await slots.listResidentsForVolunteer(db, s.id);
+  expect(r).toMatchObject({ first_name: "רבקה", needs: ["whatsapp", "banking"], phone: "0501234567" });
+  expect(await slots.cancelOwnVolunteering(db, (await slots.listStudentSlots(db, s.id))[0].volunteer_id, s.id, 48)).toBe(false);
+
+  const extra = await addStudentByAdmin(db, { name: "No Email", email: null, phone: null, added_by: "admin" });
+  expect(extra).toBeTruthy();
+  const series = await slots.createSeries(db, { ...slot, slot_date: tomorrow, place_en: null }, tomorrow, "admin");
+  // a weekly series through the driver (date and boolean parameters)
+  expect(series.created).toBe(1);
+});
+
+test("audit log, lockout, retention and delete-a-person through the driver", async () => {
+  await audit(db, "admin@test", "export", "digital", { rows: 3 });
+  expect((await listAudit(db))[0]).toMatchObject({ actor: "admin@test", details: { rows: 3 } });
+  for (let i = 0; i < 5; i++) await recordCodeFailure(db, "0500000009");
+  expect(await codeLocked(db, "0500000009")).toBe(true);
+  expect(typeof (await purgeOldData(db)).event_registrations).toBe("number");
+  expect((await deletePersonData(db, "0501234567", null)).digital_bookings).toBe(1);
 });
 
 test("event registration (a JSON object parameter) and the waiting list", async () => {
@@ -66,7 +96,6 @@ test("event registration (a JSON object parameter) and the waiting list", async 
     languages: ["he", "ru"],
     other_language: null,
     preferred_language: null,
-    role: null,
     registered_by: null,
   };
   const first = await events.registerForEvent(db, base, 1);
@@ -83,10 +112,10 @@ test("event registration (a JSON object parameter) and the waiting list", async 
 });
 
 test("settings keep their type (false stays false)", async () => {
-  await setSetting(db, "require_match_approval", false);
-  expect(await getSetting(db, "require_match_approval", true)).toBe(false);
-  await setSetting(db, "require_match_approval", true);
-  expect(await getSetting(db, "require_match_approval", false)).toBe(true);
+  await setSetting(db, "require_helper_approval", false);
+  expect(await getSetting(db, "require_helper_approval", true)).toBe(false);
+  await setSetting(db, "require_helper_approval", true);
+  expect(await getSetting(db, "require_helper_approval", false)).toBe(true);
 });
 
 test("podcast topics, pairs and the status lookup", async () => {
@@ -95,8 +124,11 @@ test("podcast topics, pairs and the status lookup", async () => {
   const a = (await join("A", "0521111111"))!;
   const b = (await join("B", "0522222222"))!;
   expect((await podcast.getParticipant(db, a.id))?.topics).toEqual(["music", "history"]);
-  expect(await podcast.makePair(db, a.id, b.id)).toBeTruthy();
+  const pairId = (await podcast.makePair(db, a.id, b.id))!;
+  expect(pairId).toBeTruthy();
+  await podcast.setPairMeeting(db, pairId, { date: "2030-11-03", time: "16:00", place: "בספרייה" });
   const [pair] = await podcast.listPairs(db);
+  expect(pair).toMatchObject({ meeting_date: "2030-11-03", meeting_time: "16:00" });
   expect(pair.members.map((m) => m.name).sort()).toEqual(["A", "B"]);
   expect(await lookupStatus(db, "0521111111", a.code)).toEqual([{ type: "podcast", status: "paired" }]);
 });

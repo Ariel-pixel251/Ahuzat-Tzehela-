@@ -3,73 +3,53 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { LANGUAGES } from "@/config/languages";
-import { MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { AGE_GROUPS, PODCAST_TOPICS } from "@/config/options";
 import { currentStudent, STUDENT_COOKIE } from "@/lib/auth/student";
 import { eventForm, getEvent } from "@/lib/calendar";
-import * as digitalDb from "@/lib/db/digital";
-import { createVisitRequest, hitRateLimit, listLessonTopics } from "@/lib/db/misc";
+import { createProblemReport, hitRateLimit, isBlocked } from "@/lib/db/misc";
 import * as podcastDb from "@/lib/db/podcast";
-import {
-  acceptConduct,
-  createLoginToken,
-  deleteSession,
-  exchangeLoginToken,
-  upsertStudent,
-} from "@/lib/db/students";
+import * as slotsDb from "@/lib/db/slots";
+import { acceptConduct, createLoginToken, deleteSession, exchangeLoginToken, profileComplete, saveProfile, upsertStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
-import {
-  claimDigital,
-  createLesson,
-  joinPodcast,
-  registerEvent,
-  requestPodcastPair,
-  respondPodcastRequest,
-} from "@/lib/domain";
+import { joinPodcast, registerEvent, requestPodcastPair, respondPodcastRequest, studentCancelCutoffHours, volunteerForSlot } from "@/lib/domain";
 import { studentEmailAllowed, studentEmailDomains } from "@/lib/env";
 import type { ActionState } from "@/lib/form";
 import { shared, studentsText as t } from "@/lib/i18n";
 import { sendEmail } from "@/lib/notify";
 import { templates } from "@/lib/notify/templates";
-import { allowed, getBaseUrl, localizeErrors, withDb } from "@/lib/server";
-import { formObject, isBot, v, validate } from "@/lib/validation";
+import { getBaseUrl, guardForm, invalid, withDb } from "@/lib/server";
+import { form, formObject, v, validate } from "@/lib/validation";
 
 const en = shared("en").errors;
-
-async function guard(db: Db, fd: FormData, action: string): Promise<ActionState> {
-  if (isBot(fd)) return { ok: true };
-  if (!(await allowed(db, `students:${action}`))) return { ok: false, message: en.rateLimited };
-  return null;
-}
-
 const intl = { international: true };
 
 // ---------------------------------------------------------------- event registration
 
 export async function registerStudentForEvent(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guard(db, fd, "event");
+    const stop = await guardForm(db, fd, "students:event", "en");
     if (stop) return stop;
-    const event = await getEvent(String(fd.get("event") ?? ""));
+    const key = v.eventKey.safeParse(fd.get("event"));
+    const event = key.success ? await getEvent(key.data) : null;
     if (!event) return { ok: false, message: en.notFound };
-    const form = eventForm(event);
-    const languageNight = form === "language-night";
-    const schema = z.object({
+    const kind = eventForm(event);
+    const languageNight = kind === "language-night";
+    const schema = form({
+      event: v.eventKey,
       name: v.name,
       email: v.email,
       // language night asks everyone for a phone number
       phone: languageNight ? v.phone(intl) : v.optionalPhone(intl),
       attendees: v.int(1, 10),
-      notes: v.optionalText(500),
+      notes: v.optionalText(500, { multiline: true }),
       languages: v.codes(LANGUAGES, { min: languageNight ? 1 : 0 }),
       other_language: v.optionalText(60),
       preferred_language: v.optionalLanguage,
-      role: form === "memorial" ? v.choice(MEMORIAL_ROLES.student.map((r) => r.code)) : z.string().optional(),
       consent: v.consent,
     });
     const r = validate(schema, formObject(fd, ["languages"]));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "en") };
+    if (!r.ok) return invalid(r.errors, "en");
     const res = await registerEvent(
       db,
       event,
@@ -82,14 +62,14 @@ export async function registerStudentForEvent(_: ActionState, fd: FormData): Pro
         notes: r.data.notes,
         languages: r.data.languages,
         other_language: r.data.other_language,
-        preferred_language: form === "game-night" ? r.data.preferred_language : null,
-        role: form === "memorial" ? (r.data.role ?? null) : null,
+        preferred_language: kind === "game-night" ? r.data.preferred_language : null,
         registered_by: null,
       },
       await getBaseUrl(),
     );
     if (!("code" in res)) {
-      return { ok: false, message: { duplicate: en.duplicate, closed: en.closed, "not-registrable": en.notFound }[res.status] };
+      const messages = { duplicate: en.duplicate, closed: en.closed, "not-registrable": en.notFound, blocked: en.unavailable };
+      return { ok: false, message: messages[res.status] };
     }
     return { ok: true, code: res.code, waitlist: res.status === "waitlist" };
   });
@@ -99,9 +79,9 @@ export async function registerStudentForEvent(_: ActionState, fd: FormData): Pro
 
 export async function joinPodcastAsStudent(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guard(db, fd, "podcast");
+    const stop = await guardForm(db, fd, "students:podcast", "en");
     if (stop) return stop;
-    const schema = z.object({
+    const schema = form({
       name: v.name,
       email: v.email,
       phone: v.optionalPhone(intl),
@@ -111,8 +91,11 @@ export async function joinPodcastAsStudent(_: ActionState, fd: FormData): Promis
       consent: v.consent,
     });
     const r = validate(schema, formObject(fd, ["topics"]));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "en") };
-    const res = await joinPodcast(db, { ...r.data, portal: "student", registered_by: null }, await getBaseUrl());
+    if (!r.ok) return invalid(r.errors, "en");
+    const d = r.data;
+    const input = { name: d.name, email: d.email, phone: d.phone, topics: d.topics, language: d.language, availability: d.availability };
+    const res = await joinPodcast(db, { ...input, portal: "student", registered_by: null }, await getBaseUrl());
+    if (res === "blocked") return { ok: false, message: en.unavailable };
     if (!res) return { ok: false, message: en.alreadyJoined };
     revalidatePath("/students/podcast");
     // the private link is also shown on screen to the person who just signed up
@@ -120,15 +103,21 @@ export async function joinPodcastAsStudent(_: ActionState, fd: FormData): Promis
   });
 }
 
+/** The podcast participant behind a private-page token (rate-limited: tokens must not be guessed). */
 async function participantFromToken(db: Db, fd: FormData) {
-  return podcastDb.getParticipantByToken(db, String(fd.get("token") ?? ""));
+  const token = v.token.safeParse(fd.get("token"));
+  if (!token.success) return null;
+  return podcastDb.getParticipantByToken(db, token.data);
 }
 
 export async function askToPair(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
+    const stop = await guardForm(db, fd, "students:pair", "en", { max: 20 });
+    if (stop) return stop;
     const me = await participantFromToken(db, fd);
-    if (!me) return { ok: false, message: t.podcast.invalid };
-    const result = await requestPodcastPair(db, me.id, String(fd.get("target") ?? ""));
+    const target = v.uuid.safeParse(fd.get("target"));
+    if (!me || !target.success) return { ok: false, message: t.podcast.invalid };
+    const result = await requestPodcastPair(db, me.id, target.data);
     revalidatePath("/students/podcast/manage");
     const messages = {
       requested: t.podcast.requested,
@@ -142,10 +131,13 @@ export async function askToPair(_: ActionState, fd: FormData): Promise<ActionSta
 
 export async function answerPairRequest(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
+    const stop = await guardForm(db, fd, "students:pair", "en", { max: 20 });
+    if (stop) return stop;
     const me = await participantFromToken(db, fd);
-    if (!me) return { ok: false, message: t.podcast.invalid };
+    const request = v.uuid.safeParse(fd.get("request"));
+    if (!me || !request.success) return { ok: false, message: t.podcast.invalid };
     const accept = fd.get("accept") === "yes";
-    const result = await respondPodcastRequest(db, String(fd.get("request") ?? ""), me.id, accept);
+    const result = await respondPodcastRequest(db, request.data, me.id, accept);
     revalidatePath("/students/podcast/manage");
     if (result === "unavailable") return { ok: false, message: t.podcast.unavailable };
     return { ok: true, message: result === "paired" ? t.podcast.paired : t.podcast.declined };
@@ -154,6 +146,8 @@ export async function answerPairRequest(_: ActionState, fd: FormData): Promise<A
 
 export async function leavePodcast(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
+    const stop = await guardForm(db, fd, "students:pair", "en", { max: 20 });
+    if (stop) return stop;
     const me = await participantFromToken(db, fd);
     if (!me) return { ok: false, message: t.podcast.invalid };
     await podcastDb.withdraw(db, me.id);
@@ -166,20 +160,21 @@ export async function leavePodcast(_: ActionState, fd: FormData): Promise<Action
 
 export async function requestSignInLink(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guard(db, fd, "signin");
+    const stop = await guardForm(db, fd, "students:signin", "en", { max: 5 });
     if (stop) return stop;
-    const r = validate(z.object({ name: v.name, email: v.email, phone: v.optionalPhone(intl) }), formObject(fd));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "en") };
+    const r = validate(form({ name: v.name, email: v.email, phone: v.optionalPhone(intl), consent: v.consent }), formObject(fd));
+    if (!r.ok) return invalid(r.errors, "en");
     // students see residents' phone numbers, so sign-in can be limited to school addresses
     const domains = studentEmailDomains();
     if (!studentEmailAllowed(r.data.email, domains)) {
       return { ok: false, errors: { email: t.signIn.schoolEmailOnly(domains.map((d) => `@${d}`).join(", ")) } };
     }
+    if (await isBlocked(db, r.data.phone, r.data.email)) return { ok: false, message: en.unavailable };
     const student = await upsertStudent(db, r.data);
     const token = await createLoginToken(db, student.id);
     if (!token) return { ok: false, message: t.signIn.tooMany };
     const url = `${await getBaseUrl()}/students/auth?token=${token}`;
-    const sent = await sendEmail(student.email, templates.studentSignIn({ name: student.name.split(" ")[0], url }));
+    const sent = await sendEmail(r.data.email, templates.studentSignIn({ name: student.name.split(" ")[0], url }));
     // without an email provider (local development only), show the link on screen
     if (sent === "logged" && process.env.NODE_ENV !== "production") return { ok: true, data: { devLink: url } };
     if (sent === "logged") return { ok: false, message: en.emailNotSetUp };
@@ -190,7 +185,10 @@ export async function requestSignInLink(_: ActionState, fd: FormData): Promise<A
 
 export async function completeSignIn(_: ActionState, fd: FormData): Promise<ActionState> {
   const res = await withDb("en", async (db) => {
-    const session = await exchangeLoginToken(db, String(fd.get("token") ?? ""));
+    const stop = await guardForm(db, fd, "students:auth", "en", { max: 10 });
+    if (stop) return stop;
+    const token = v.token.safeParse(fd.get("token"));
+    const session = token.success ? await exchangeLoginToken(db, token.data) : null;
     if (!session) return { ok: false, message: t.signIn.invalid };
     (await cookies()).set(STUDENT_COOKIE, session.token, {
       httpOnly: true,
@@ -201,7 +199,7 @@ export async function completeSignIn(_: ActionState, fd: FormData): Promise<Acti
     });
     return { ok: true };
   });
-  if (res?.ok) redirect("/students/digital/mine");
+  if (res?.ok) redirect("/students/mine");
   return res;
 }
 
@@ -215,120 +213,109 @@ export async function signOut(): Promise<void> {
     });
   }
   store.delete(STUDENT_COOKIE);
-  redirect("/students/digital");
+  redirect("/students/digital-support");
 }
 
-// ---------------------------------------------------------------- digital support
+// ---------------------------------------------------------------- profile and code of conduct
 
-export async function takeRequest(_: ActionState, fd: FormData): Promise<ActionState> {
-  const res = await withDb("en", async (db) => {
-    const student = await currentStudent(db);
-    if (!student) return { ok: false, message: t.digital.signInToTake };
-    if (!studentEmailAllowed(student.email)) return { ok: false, message: t.digital.signInToTake };
-    if (!(await hitRateLimit(db, `students:take:${student.id}`, 5, 3600))) return { ok: false, message: t.digital.tooManyTaken };
-    const result = await claimDigital(db, String(fd.get("request") ?? ""), student.id, await getBaseUrl());
-    if (result === "unavailable") return { ok: false, message: t.digital.alreadyTaken };
-    revalidatePath("/students/digital");
-    return { ok: true, message: result };
-  });
-  // the card leaves the open list, so show the result on "My requests"
-  if (res?.ok) redirect(`/students/digital/mine?taken=${res.message}`);
-  return res;
-}
-
-async function withStudent(fd: FormData, fn: (db: Db, studentId: string, requestId: string) => Promise<ActionState>) {
+async function withStudent(fn: (db: Db, student: NonNullable<Awaited<ReturnType<typeof currentStudent>>>) => Promise<ActionState>) {
   return withDb("en", async (db) => {
     const student = await currentStudent(db);
-    if (!student) return { ok: false, message: t.digital.signInToTake };
-    const res = await fn(db, student.id, String(fd.get("request") ?? ""));
-    revalidatePath("/students/digital/mine");
-    return res;
+    if (!student) return { ok: false, message: t.digital.signInToVolunteer };
+    if (await isBlocked(db, student.phone, student.email)) return { ok: false, message: en.unavailable };
+    return fn(db, student);
   });
 }
 
-export async function releaseRequest(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withStudent(fd, async (db, studentId, requestId) =>
-    (await digitalDb.releaseDigitalRequest(db, requestId, studentId))
-      ? { ok: true, message: t.mine.released }
-      : { ok: false, message: en.generic },
-  );
-}
-
-export async function markRequestDone(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withStudent(fd, async (db, studentId, requestId) =>
-    (await digitalDb.completeDigitalRequest(db, requestId, studentId))
-      ? { ok: true, message: t.mine.markedDone }
-      : { ok: false, message: en.generic },
-  );
+export async function saveStudentProfile(_: ActionState, fd: FormData): Promise<ActionState> {
+  return withStudent(async (db, student) => {
+    const schema = form({
+      phone: v.optionalPhone(intl),
+      age_group: v.choice(AGE_GROUPS.map((a) => a.code)),
+      guardian_name: v.optionalText(100),
+      guardian_phone: v.optionalPhone(intl),
+      guardian_confirm: v.checkbox,
+    });
+    const r = validate(schema, formObject(fd));
+    if (!r.ok) return invalid(r.errors, "en");
+    const minor = r.data.age_group === "under-18";
+    if (minor && !(r.data.guardian_name && r.data.guardian_phone && r.data.guardian_confirm)) {
+      return { ok: false, message: t.mine.guardianRequired };
+    }
+    await saveProfile(db, student.id, {
+      phone: r.data.phone,
+      age_group: r.data.age_group,
+      guardian_name: minor ? r.data.guardian_name : null,
+      guardian_phone: minor ? r.data.guardian_phone : null,
+    });
+    revalidatePath("/students/mine");
+    return { ok: true, message: t.mine.profileSaved };
+  });
 }
 
 export async function acceptCodeOfConduct(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withDb("en", async (db) => {
-    const student = await currentStudent(db);
-    if (!student) return { ok: false, message: t.digital.signInToTake };
+  return withStudent(async (db, student) => {
     if (fd.get("accept") !== "on") return { ok: false, errors: { accept: en.consent } };
     await acceptConduct(db, student.id);
-    revalidatePath("/students/digital/mine");
-    return { ok: true };
+    revalidatePath("/students/mine");
+    return { ok: true, message: t.mine.conductAccepted };
   });
 }
 
-// ---------------------------------------------------------------- lessons and visits
+// ---------------------------------------------------------------- digital support: volunteer for slots
 
-export async function offerLessons(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withDb("en", async (db) => {
-    const stop = await guard(db, fd, "lessons");
-    if (stop) return stop;
-    const topics = (await listLessonTopics(db)).map((x) => ({ code: x.id }));
-    const schema = z
-      .object({
-        name: v.name,
-        email: v.email,
-        phone: v.optionalPhone(intl),
-        topics: v.codes(topics),
-        other_topic: v.optionalText(200),
-        notes: v.optionalText(500),
-        consent: v.consent,
-      })
-      .refine((d) => d.topics.length > 0 || d.other_topic, { message: "choose", path: ["topics"] });
-    const r = validate(schema, formObject(fd, ["topics"]));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "en") };
-    await createLesson(db, {
-      role: "teach",
-      portal: "student",
-      name: r.data.name,
-      email: r.data.email,
-      phone: r.data.phone,
-      topics: r.data.topics,
-      other_topic: r.data.other_topic,
-      notes: r.data.notes,
-      registered_by: null,
-    });
-    return { ok: true, message: t.lessons.thanks };
+export async function volunteerForSlotAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return withStudent(async (db, student) => {
+    if (!student.email || !studentEmailAllowed(student.email)) return { ok: false, message: t.digital.signInToVolunteer };
+    if (!profileComplete(student)) return { ok: false, message: t.digital.profileNeeded };
+    if (!(await hitRateLimit(db, `students:volunteer:${student.id}`, 10, 3600))) return { ok: false, message: t.digital.tooMany };
+    const slot = v.uuid.safeParse(fd.get("slot"));
+    if (!slot.success) return { ok: false, message: t.digital.notOpen };
+    const result = await volunteerForSlot(db, slot.data, student, await getBaseUrl());
+    revalidatePath("/students/digital-support");
+    revalidatePath("/students/mine");
+    const messages = {
+      confirmed: t.digital.volunteered,
+      pending: t.digital.pending,
+      full: t.digital.full,
+      duplicate: t.digital.alreadyIn,
+      closed: t.digital.notOpen,
+      not_found: t.digital.notOpen,
+      blocked: en.unavailable,
+    };
+    return { ok: result === "confirmed" || result === "pending", message: messages[result] };
   });
 }
 
-export async function requestVisit(_: ActionState, fd: FormData): Promise<ActionState> {
+export async function cancelMyPlace(_: ActionState, fd: FormData): Promise<ActionState> {
+  return withStudent(async (db, student) => {
+    const id = v.uuid.safeParse(fd.get("volunteer"));
+    const cutoff = await studentCancelCutoffHours(db);
+    if (!id.success || !(await slotsDb.cancelOwnVolunteering(db, id.data, student.id, cutoff))) {
+      return { ok: false, message: t.mine.cancelTooLate(cutoff) };
+    }
+    revalidatePath("/students/mine");
+    revalidatePath("/students/digital-support");
+    return { ok: true, message: t.mine.cancelled };
+  });
+}
+
+// ---------------------------------------------------------------- report a problem
+
+export async function reportProblemAsStudent(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guard(db, fd, "visit");
+    const stop = await guardForm(db, fd, "students:report", "en", { max: 5 });
     if (stop) return stop;
-    const schema = z.object({
-      name: v.name,
-      organization: v.optionalText(200),
-      email: v.email,
-      phone: v.optionalPhone(intl),
-      preferred_dates: v.optionalText(200),
-      group_size: z
-        .string()
-        .optional()
-        .transform((s) => (s ? Number(s) : null))
-        .refine((n) => n === null || (Number.isInteger(n) && n >= 1 && n <= 200), "choose"),
-      notes: v.optionalText(1000),
+    const schema = form({
+      message: v.text(2000, { multiline: true }),
+      name: v.optionalText(100),
+      contact: v.optionalText(200),
       consent: v.consent,
     });
     const r = validate(schema, formObject(fd));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "en") };
-    await createVisitRequest(db, r.data);
-    return { ok: true, message: t.visit.thanks };
+    if (!r.ok) return invalid(r.errors, "en");
+    await createProblemReport(db, { portal: "student", name: r.data.name, contact: r.data.contact, message: r.data.message });
+    return { ok: true, message: t.report.thanks };
   });
 }
+

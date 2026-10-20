@@ -29,15 +29,6 @@ export type PublicParticipant = Pick<Participant, "id" | "portal" | "topics" | "
   first_name: string;
 };
 
-const STATUS = `case when m.pair_id is not null then 'paired'
-  when exists (select 1 from podcast_pair_requests r where r.status = 'pending' and p.id in (r.from_id, r.to_id))
-  then 'requested' else 'looking' end`;
-
-const SELECT = `
-  select p.id, p.created_at, p.name, p.email, p.phone, p.portal, p.topics, p.language, p.availability,
-         p.registered_by, p.active, p.code, m.pair_id, ${STATUS} as status
-    from podcast_participants p left join podcast_pair_members m on m.participant_id = p.id`;
-
 /** Returns null when this email or phone has already signed up. */
 export async function joinPodcast(db: Db, input: ParticipantInput) {
   const code = newCode();
@@ -64,31 +55,29 @@ export async function joinPodcast(db: Db, input: ParticipantInput) {
 }
 
 export async function getParticipant(db: Db, id: string) {
-  const [row] = await db.query<Participant>(`${SELECT} where p.id = $1`, [id]);
+  const [row] = await db.query<Participant>(`select * from podcast_people where id = $1`, [id]);
   return row ?? null;
 }
 
 export async function getParticipantByToken(db: Db, rawToken: string) {
-  const [row] = await db.query<Participant>(`${SELECT} where p.manage_token_hash = $1`, [hashToken(rawToken)]);
+  const [row] = await db.query<Participant>(`select * from podcast_people where manage_token_hash = $1`, [hashToken(rawToken)]);
   return row ?? null;
 }
 
 /** Active people not yet in a pair (status looking or requested). */
 export const listLooking = (db: Db) =>
   db.query<PublicParticipant>(
-    `select p.id, split_part(trim(p.name), ' ', 1) as first_name, p.portal, p.topics, p.language, p.availability,
-            ${STATUS} as status
-       from podcast_participants p left join podcast_pair_members m on m.participant_id = p.id
-      where p.active and m.pair_id is null
-      order by p.created_at`,
+    `select id, first_name, portal, topics, language, availability, status
+       from podcast_people where active and pair_id is null order by created_at`,
   );
 
-export const listParticipants = (db: Db) => db.query<Participant>(`${SELECT} order by p.created_at`);
+export const listParticipants = (db: Db) => db.query<Participant>(`select * from podcast_people order by created_at`);
 
 /** The other member of someone's pair, with contact details (only for their partner and admins). */
 export async function getPartner(db: Db, participantId: string) {
   const [row] = await db.query<Participant>(
-    `${SELECT} where m.pair_id = (select pair_id from podcast_pair_members where participant_id = $1) and p.id <> $1`,
+    `select * from podcast_people
+      where pair_id = (select pair_id from podcast_pair_members where participant_id = $1) and id <> $1`,
     [participantId],
   );
   return row ?? null;
@@ -147,14 +136,34 @@ export async function makePair(db: Db, a: string, b: string, createdBy: "admin" 
 }
 
 export const listPairs = (db: Db) =>
-  db.query<{ pair_id: string; created_at: Date; created_by: string; members: Participant[] }>(
-    `select pp.id as pair_id, pp.created_at, pp.created_by,
+  db.query<{
+    pair_id: string;
+    created_at: Date;
+    created_by: string;
+    meeting_date: string | null;
+    meeting_time: string | null;
+    meeting_place: string | null;
+    members: Participant[];
+  }>(
+    `select pp.id as pair_id, pp.created_at, pp.created_by, to_char(pp.meeting_date, 'YYYY-MM-DD') as meeting_date,
+            pp.meeting_time, pp.meeting_place,
             (select json_agg(json_build_object('id', p.id, 'name', p.name, 'email', p.email, 'phone', p.phone,
                     'portal', p.portal, 'language', p.language) order by p.portal desc)
                from podcast_pair_members m join podcast_participants p on p.id = m.participant_id
               where m.pair_id = pp.id) as members
        from podcast_pairs pp order by pp.created_at desc`,
   );
+
+export type Meeting = { date: string; time: string | null; place: string | null };
+
+/** When and where a pair first meets (set by an admin). */
+export const setPairMeeting = (db: Db, pairId: string, m: Meeting) =>
+  db.query(`update podcast_pairs set meeting_date = $2, meeting_time = $3, meeting_place = $4 where id = $1`, [
+    pairId,
+    m.date,
+    m.time,
+    m.place,
+  ]);
 
 export const unpair = (db: Db, pairId: string) => db.query(`delete from podcast_pairs where id = $1`, [pairId]);
 
@@ -164,8 +173,14 @@ export async function withdraw(db: Db, participantId: string) {
     `delete from podcast_pairs where id = (select pair_id from podcast_pair_members where participant_id = $1)`,
     [participantId],
   );
-  await db.query(`update podcast_participants set active = false where id = $1`, [participantId]);
+  await db.query(`update podcast_participants set active = false, withdrawn_at = now() where id = $1`, [participantId]);
   await db.query(`update podcast_pair_requests set status = 'cancelled' where status = 'pending' and $1 in (from_id, to_id)`, [
     participantId,
   ]);
+}
+
+/** A signed-in student's own podcast sign-up (matched by their email). */
+export async function getParticipantByEmail(db: Db, email: string) {
+  const [row] = await db.query<Participant>(`select * from podcast_people where lower(email) = lower($1) and active`, [email]);
+  return row ?? null;
 }

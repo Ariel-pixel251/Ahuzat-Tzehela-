@@ -1,0 +1,11 @@
+# Secret scanning (gitleaks), run in CI over the whole git history.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and documentation placeholders, not real secrets"
+paths = [
+  '''tests/.*''',
+  '''e2e/.*''',
+  '''\.env\.example''',
+]

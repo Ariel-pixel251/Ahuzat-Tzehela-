@@ -2,7 +2,7 @@ import { hashToken, newCode, newToken } from "../tokens";
 import type { Db } from "./types";
 
 export type Portal = "student" | "resident";
-export type RegistrationKind = "general" | "language-night" | "game-night" | "memorial";
+export type RegistrationKind = "general" | "language-night" | "game-night";
 export type RegistrationStatus = "confirmed" | "waitlist" | "cancelled";
 
 export type RegistrationInput = {
@@ -21,7 +21,6 @@ export type RegistrationInput = {
   languages: string[];
   other_language: string | null;
   preferred_language: string | null;
-  role: string | null;
   registered_by: string | null;
 };
 
@@ -33,10 +32,6 @@ export type Registration = RegistrationInput & {
   reminder_sent_for: string | null;
   cancel_notice_sent_at: Date | null;
 };
-
-const COLUMNS = `id, created_at, event_key, event_title_en, event_title_he, to_char(event_date, 'YYYY-MM-DD') as event_date,
-  event_time, kind, portal, name, phone, email, attendees, notes, languages, other_language, preferred_language,
-  role, registered_by, status, code, reminder_sent_for, cancel_notice_sent_at`;
 
 export type RegisterResult =
   | { status: "confirmed" | "waitlist"; id: string; code: string; token: string | null }
@@ -65,7 +60,7 @@ export async function cancelRegistration(db: Db, id: string, capacity: number | 
   );
   const ids = promoted.map((p) => p.id).filter(Boolean);
   if (!ids.length) return [];
-  return db.query<Registration>(`select ${COLUMNS} from event_registrations where id = any(text_array($1::text::jsonb)::uuid[])`, [
+  return db.query<Registration>(`select * from event_registration_list where id = any(text_array($1::text::jsonb)::uuid[])`, [
     JSON.stringify(ids),
   ]);
 }
@@ -75,29 +70,29 @@ export async function promoteWaitlist(db: Db, eventKey: string, capacity: number
   const promoted = await db.query<{ id: string }>(`select promote_waitlist($1, $2::int) as id`, [eventKey, capacity]);
   const ids = promoted.map((p) => p.id).filter(Boolean);
   if (!ids.length) return [];
-  return db.query<Registration>(`select ${COLUMNS} from event_registrations where id = any(text_array($1::text::jsonb)::uuid[])`, [
+  return db.query<Registration>(`select * from event_registration_list where id = any(text_array($1::text::jsonb)::uuid[])`, [
     JSON.stringify(ids),
   ]);
 }
 
 export async function getRegistrationByToken(db: Db, rawToken: string) {
-  const [row] = await db.query<Registration>(`select ${COLUMNS} from event_registrations where manage_token_hash = $1`, [
+  const [row] = await db.query<Registration>(`select * from event_registration_list where manage_token_hash = $1`, [
     hashToken(rawToken),
   ]);
   return row ?? null;
 }
 
 export async function getRegistration(db: Db, id: string) {
-  const [row] = await db.query<Registration>(`select ${COLUMNS} from event_registrations where id = $1`, [id]);
+  const [row] = await db.query<Registration>(`select * from event_registration_list where id = $1`, [id]);
   return row ?? null;
 }
 
 export const listRegistrations = (db: Db) =>
-  db.query<Registration>(`select ${COLUMNS} from event_registrations order by event_date desc, event_key, created_at`);
+  db.query<Registration>(`select * from event_registration_list order by event_date desc, event_key, created_at`);
 
 export const listRegistrationsForEvent = (db: Db, eventKey: string) =>
   db.query<Registration>(
-    `select ${COLUMNS} from event_registrations where event_key = $1 and status <> 'cancelled' order by created_at`,
+    `select * from event_registration_list where event_key = $1 and status <> 'cancelled' order by created_at`,
     [eventKey],
   );
 
@@ -115,7 +110,7 @@ export async function confirmedCounts(db: Db, eventKeys: string[]) {
 /** Registrations that still need a reminder for this event occurrence ("date time"). */
 export const listNeedingReminder = (db: Db, eventKey: string, occurrence: string) =>
   db.query<Registration>(
-    `select ${COLUMNS} from event_registrations
+    `select * from event_registration_list
       where event_key = $1 and status = 'confirmed' and reminder_sent_for is distinct from $2`,
     [eventKey, occurrence],
   );
@@ -127,3 +122,12 @@ export const markCancelNoticeSent = (db: Db, eventKey: string) =>
   db.query(`update event_registrations set cancel_notice_sent_at = now() where event_key = $1 and status <> 'cancelled'`, [
     eventKey,
   ]);
+
+/** A signed-in student's own registrations (matched by their email). */
+export const listMyEventRegistrations = (db: Db, email: string) =>
+  db.query<Registration>(
+    `select * from event_registration_list
+      where lower(email) = lower($1) and event_date::date >= current_date - 7
+      order by event_date, event_time`,
+    [email],
+  );

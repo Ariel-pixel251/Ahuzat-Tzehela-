@@ -7,7 +7,8 @@ import { hitRateLimit } from "@/lib/db/misc";
 import { DbNotConfiguredError, type Db } from "@/lib/db/types";
 import { shared, type Locale } from "@/lib/i18n";
 import type { ActionState } from "@/lib/form";
-import type { FieldErrors } from "@/lib/validation";
+import { logError } from "@/lib/log";
+import { isBot, type FieldErrors } from "@/lib/validation";
 
 export type { ActionState } from "@/lib/form";
 
@@ -42,6 +43,22 @@ export function localizeErrors(errors: FieldErrors, locale: Locale) {
   return Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, text[v]]));
 }
 
+/** A failed validation as a form result; an error on the form as a whole becomes its message. */
+export function invalid(errors: FieldErrors, locale: Locale): ActionState {
+  const localized = localizeErrors(errors, locale);
+  return { ok: false, errors: localized, message: localized._ ?? undefined };
+}
+
+/**
+ * Honeypot and rate limit for a public form. Returns a state to stop with, or null to go on.
+ * Bots get a normal-looking answer and nothing is saved.
+ */
+export async function guardForm(db: Db, fd: FormData, action: string, locale: Locale, { max = 10, windowSeconds = 600 } = {}): Promise<ActionState> {
+  if (isBot(fd)) return { ok: true, code: locale === "he" ? "0000" : undefined };
+  if (!(await allowed(db, action, max, windowSeconds))) return { ok: false, message: shared(locale).errors.rateLimited };
+  return null;
+}
+
 /** Runs an action with the database, turning failures into friendly messages. */
 export async function withDb(locale: Locale, fn: (db: Db) => Promise<ActionState>): Promise<ActionState> {
   try {
@@ -55,7 +72,7 @@ export async function withDb(locale: Locale, fn: (db: Db) => Promise<ActionState
     }
     // redirect() and notFound() work by throwing; let them through
     if (err && typeof err === "object" && "digest" in err) throw err;
-    console.error(err);
+    logError("action", err);
     return { ok: false, message: shared(locale).errors.generic };
   }
 }

@@ -30,7 +30,7 @@
     "start": "2026-12-14",
     "end": "2026-12-15",
     "tbc": true,
-    "tags": ["visit"]
+    "tags": []
   },
   {
     "id": "seed-lecture-2026-12-15",
@@ -46,6 +46,6 @@
     "start": "2027-01-27",
     "description": "Memory in the living room with residents, and an English lecture by Leah (topic to be confirmed).\n---\nזיכרון בסלון עם הדיירים, והרצאה באנגלית של לאה (הנושא עוד ייקבע).",
     "tbc": true,
-    "tags": ["memorial"]
+    "tags": []
   }
 ]

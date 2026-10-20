@@ -6,23 +6,21 @@ import { buttonClass } from "@/components/ui";
 import type { StatusItem } from "@/lib/db/misc";
 import { HONEYPOT } from "@/lib/form";
 import { residentsText as t } from "@/lib/i18n";
-import { formatDateTime } from "@/lib/i18n/format";
+import { formatDateTime, formatSlot } from "@/lib/i18n/format";
 
 const s = t.pages.status;
 
 function describe(item: StatusItem): string {
   switch (item.type) {
-    case "digital":
-      if (item.status === "assigned") return item.volunteer_first_name ? s.digital.assigned(item.volunteer_first_name) : s.digital.assignedWaiting;
-      return s.digital[item.status as "open" | "done" | "cancelled"] ?? item.status;
+    case "digital": {
+      const when = formatSlot(item, "he");
+      const status = item.slot_status === "cancelled" ? s.digital.slotCancelled : s.digital[item.status as "confirmed" | "cancelled"] ?? item.status;
+      return `${when}: ${status}`;
+    }
     case "event":
       return `${item.title_he}, ${formatDateTime(item.date, item.time, "he")}: ${s.event[item.status as "confirmed"] ?? item.status}`;
     case "podcast":
       return s.podcast[item.status as "looking" | "paired"] ?? item.status;
-    case "lecture":
-      return `${item.topic}: ${s.lecture[item.status as "new"] ?? item.status}`;
-    case "lesson":
-      return s.lesson[item.status as "open"] ?? item.status;
   }
 }
 

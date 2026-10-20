@@ -11,6 +11,8 @@ import type { Db } from "./types";
 export function postgresDb(url: string, options: postgres.Options<Record<string, postgres.PostgresType>> = {}) {
   // prepare: false is required for Supabase's transaction pooler
   const sql = postgres(url, { prepare: false, max: 5, connect_timeout: 10, ...options });
+  // unsafe(text, params) is postgres.js's call for a query with bind parameters ($1, $2…): the values
+  // are sent separately from the text. The text itself is always a constant (see eslint.config.mjs).
   const db: Db = { query: async (text, params = []) => (await sql.unsafe(text, params as never[])) as never };
   return { db, end: () => sql.end() };
 }

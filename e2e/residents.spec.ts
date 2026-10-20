@@ -1,19 +1,21 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { contact, next, send } from "./helpers";
 
 // Full resident flows at 360px: everything by big buttons, one question per screen.
 
-const next = (page: Page) => page.getByRole("button", { name: "הבא", exact: true }).click();
-const send = (page: Page) => page.getByRole("button", { name: "אני מאשר/ת ושולח/ת" }).click();
-
-async function contact(page: Page, name: string, phone: string) {
-  await page.getByLabel("שם", { exact: true }).fill(name);
-  await page.getByLabel("טלפון", { exact: true }).fill(phone);
-  await next(page);
-}
+test("the home page: the project's name and four big buttons, no greeting", async ({ page }) => {
+  await page.goto("/residents");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("EMIS × אחוזת צהלה");
+  await expect(page.getByText("פודקאסט, ליווי דיגיטלי ואירועים - ביחד")).toBeVisible();
+  const buttons = page.locator("main ul a");
+  await expect(buttons).toHaveText(["מה קורה השבוע?", "עזרה עם הטלפון או המחשב", "פודקאסט", "צרו איתי קשר"]);
+  await expect(page.getByText(/שלום/)).toHaveCount(0);
+  await expect(page).toHaveTitle("EMIS × אחוזת צהלה");
+});
 
 test("register for an event (language night)", async ({ page }) => {
   await page.goto("/residents");
-  await page.getByRole("link", { name: "אני רוצה להירשם לאירוע" }).click();
+  await page.getByRole("link", { name: "מה קורה השבוע?" }).click();
   await page.getByRole("link", { name: /אני רוצה להגיע\s*: ערב שפות/ }).first().click();
   await expect(page.getByText("שלב 1 מתוך 4")).toBeVisible();
 
@@ -42,11 +44,12 @@ test("register for an event (language night)", async ({ page }) => {
   await expect(page.getByText(/^\d{4}$/)).toBeVisible();
 });
 
-test("ask for help with the phone, then check the status by phone and code", async ({ page }) => {
+test("podcast sign-up: time wheels for the hours, then check the status by phone and code", async ({ page }) => {
   await page.goto("/residents");
-  await page.getByRole("link", { name: "אני צריך/ה עזרה עם הטלפון או המחשב" }).click();
-  await page.getByRole("button", { name: "וואטסאפ" }).click();
+  await page.getByRole("link", { name: "פודקאסט" }).click();
+  await page.getByRole("button", { name: "סיפורי חיים" }).click();
   await next(page);
+  await next(page); // Hebrew is chosen already
   await page.getByRole("button", { name: "שני" }).click();
   await next(page);
   await expect(page.getByRole("heading", { name: "באילו שעות נוח לכם?" })).toBeVisible();
@@ -59,8 +62,7 @@ test("ask for help with the phone, then check the status by phone and code", asy
   await expect(from).toHaveAttribute("aria-valuetext", "10:30");
   await page.getByRole("button", { name: "מאוחר יותר" }).nth(1).click();
   await expect(until).toHaveAttribute("aria-valuetext", "12:30");
-  // scrolling the wheel picks the time in the middle row
-  // (until options start at 11:00, so 13:30 is the 6th row)
+  // scrolling the wheel picks the time in the middle row (until options start at 11:00: 13:30 is the 6th row)
   await until.evaluate((el) => el.scrollTo({ top: 64 * 5, behavior: "instant" }));
   await expect(until).toHaveAttribute("aria-valuetext", "13:30");
   // "from" can't pass "until": at 13:30 the until wheel moves along to 14:30
@@ -73,7 +75,6 @@ test("ask for help with the phone, then check the status by phone and code", asy
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   }
   await next(page);
-  await next(page); // Hebrew is chosen already
   await contact(page, "שרה לוי", "052-765-4321");
   await expect(page.getByText("14:00–14:30")).toBeVisible();
   await send(page);
@@ -84,12 +85,13 @@ test("ask for help with the phone, then check the status by phone and code", asy
   await page.getByLabel("טלפון").fill("0527654321");
   await page.getByLabel("קוד הבקשה").fill(code);
   await page.getByRole("button", { name: "בדיקה" }).click();
-  await expect(page.getByText("ממתין למתנדב")).toBeVisible();
+  await expect(page.getByText("מחפשים לכם שותף")).toBeVisible();
 });
 
-test("no fixed time: 'send me a message and we'll arrange a time'", async ({ page }) => {
-  await page.goto("/residents/help");
-  await page.getByRole("button", { name: "מחשב", exact: true }).click();
+test("podcast with no fixed time: 'send me a message and we'll arrange a time'", async ({ page }) => {
+  await page.goto("/residents/podcast");
+  await page.getByRole("button", { name: "מוזיקה" }).click();
+  await next(page);
   await next(page);
   await next(page); // any day
   const byMessage = page.getByRole("button", { name: "אין שעה קבועה? שלחו לי הודעה ונתאם" });
@@ -97,14 +99,35 @@ test("no fixed time: 'send me a message and we'll arrange a time'", async ({ pag
   await expect(byMessage).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("spinbutton")).toHaveCount(0);
   await next(page);
-  await next(page);
   await contact(page, "דוד כהן", "054-222-3344");
   await expect(page.getByText("נתאם שעה בהודעה")).toBeVisible();
   await send(page);
   await expect(page.getByRole("heading", { name: "תודה! קיבלנו." })).toBeVisible();
+});
 
-  await page.goto("/students/digital");
-  await expect(page.getByText("Arrange the time by message").first()).toBeVisible();
+test("five wrong codes lock the status lookup for that phone number", async ({ page }) => {
+  await page.goto("/residents/status");
+  for (let i = 0; i < 5; i++) {
+    await page.getByLabel("טלפון").fill("0531112233");
+    await page.getByLabel("קוד הבקשה").fill(String(1000 + i));
+    await page.getByRole("button", { name: "בדיקה" }).click();
+    await expect(page.getByText(/לא מצאנו בקשה/)).toBeVisible();
+  }
+  await page.getByLabel("קוד הבקשה").fill("1999");
+  await page.getByRole("button", { name: "בדיקה" }).click();
+  await expect(page.getByText(/נעשו יותר מדי ניסיונות/)).toBeVisible();
+});
+
+test("report a problem, from the link on every page", async ({ page }) => {
+  await page.goto("/residents/events");
+  await page.getByRole("link", { name: "דיווח על בעיה" }).click();
+  await expect(page.getByRole("heading", { name: "דיווח על בעיה" })).toBeVisible();
+  await page.getByLabel("מה קרה", { exact: true }).fill("מישהו ביקש ממני סיסמה");
+  await next(page);
+  await next(page); // name and phone are optional
+  await send(page);
+  await expect(page.getByText("תודה שסיפרתם לנו.")).toBeVisible();
+  await expect(page.getByText(/^\d{4}$/)).toHaveCount(0);
 });
 
 test("call me back, from the button on every page", async ({ page }) => {

@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
+import { Markdown } from "@/components/Markdown";
+import { Notice } from "@/components/ui";
 import { residentsText as t } from "@/lib/i18n";
+import { legalText } from "@/lib/legal";
 
 export const metadata: Metadata = { title: t.pages.privacy.title };
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
   return (
-    <>
-      <h1 className="mb-6 text-4xl font-extrabold">{t.pages.privacy.title}</h1>
-      <ul className="space-y-4 text-xl">
-        {t.pages.privacy.body.map((line) => (
-          <li key={line} className="rounded-xl bg-sand p-4">{line}</li>
-        ))}
-      </ul>
-    </>
+    <article className="text-xl">
+      <Notice kind="warn" className="mb-6">{t.pages.privacy.draft}</Notice>
+      <Markdown source={await legalText("privacy-residents")} />
+    </article>
   );
 }

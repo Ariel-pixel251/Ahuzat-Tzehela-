@@ -1,5 +1,3 @@
-import { newCode } from "../tokens";
-import type { Portal } from "./events";
 import type { Db } from "./types";
 
 // ---------------------------------------------------------------- rate limiting
@@ -40,150 +38,26 @@ export const queueMessage = (db: Db, m: { channel: "sms" | "whatsapp"; to_phone:
     m.channel,
     m.to_phone,
     m.to_name,
-    m.body,
+    m.body.slice(0, 2000),
   ]);
 
 export const listMessages = (db: Db) =>
-  db.query<OutboundMessage>(`select * from outbound_messages order by status desc, created_at desc limit 500`);
+  db.query<OutboundMessage>(
+    `select id, created_at, channel, to_phone, to_name, body, status from outbound_messages
+      order by status desc, created_at desc limit 500`,
+  );
 
 export const markMessageSent = (db: Db, id: string) =>
   db.query(`update outbound_messages set status = 'sent', sent_at = now() where id = $1`, [id]);
 
-// ---------------------------------------------------------------- lessons
-
-export type LessonTopic = { id: string; name_en: string; name_he: string; active: boolean; sort: number };
-
-export const listLessonTopics = (db: Db, activeOnly = true) =>
-  db.query<LessonTopic>(`select * from lesson_topics ${activeOnly ? "where active" : ""} order by sort, name_en`);
-
-export const addLessonTopic = (db: Db, t: { name_en: string; name_he: string }) =>
-  db.query(`insert into lesson_topics (name_en, name_he, sort) values ($1, $2, (select coalesce(max(sort), 0) + 1 from lesson_topics))`, [
-    t.name_en,
-    t.name_he,
-  ]);
-
-export const toggleLessonTopic = (db: Db, id: string) =>
-  db.query(`update lesson_topics set active = not active where id = $1`, [id]);
-
-export type LessonInput = {
-  role: "learn" | "teach";
-  portal: Portal;
-  name: string;
-  phone: string | null;
-  email: string | null;
-  topics: string[];
-  other_topic: string | null;
-  notes: string | null;
-  registered_by: string | null;
-};
-export type LessonRequest = LessonInput & { id: string; created_at: Date; status: string; code: string };
-
-export async function createLessonRequest(db: Db, input: LessonInput) {
-  const code = newCode();
-  const [row] = await db.query<{ id: string }>(
-    `insert into lesson_requests (role, portal, name, phone, email, topics, other_topic, notes, registered_by, code)
-     values ($1, $2, $3, $4, $5, text_array($6::text::jsonb), $7, $8, $9, $10) returning id`,
-    [
-      input.role,
-      input.portal,
-      input.name,
-      input.phone,
-      input.email,
-      JSON.stringify(input.topics),
-      input.other_topic,
-      input.notes,
-      input.registered_by,
-      code,
-    ],
-  );
-  return { id: row.id, code };
-}
-
-export const listLessonRequests = (db: Db) =>
-  db.query<LessonRequest>(`select * from lesson_requests order by created_at desc`);
-
-export const listLessonMatches = (db: Db) =>
-  db.query<{ id: string; learner_id: string; teacher_id: string; topic: string | null }>(
-    `select id, learner_id, teacher_id, topic from lesson_matches order by created_at desc`,
-  );
-
-/** Matches a learner with a teacher. Returns false if the learner already has a match. */
-export async function matchLesson(db: Db, learnerId: string, teacherId: string, topic: string | null) {
-  const rows = await db.query(
-    `insert into lesson_matches (learner_id, teacher_id, topic)
-     select $1, $2, $3
-      where exists (select 1 from lesson_requests where id = $1 and role = 'learn' and status = 'open')
-        and exists (select 1 from lesson_requests where id = $2 and role = 'teach')
-     on conflict (learner_id) do nothing returning id`,
-    [learnerId, teacherId, topic],
-  );
-  if (!rows.length) return false;
-  await db.query(`update lesson_requests set status = 'matched' where id = $1`, [learnerId]);
-  return true;
-}
-
-export async function unmatchLesson(db: Db, matchId: string) {
-  await db.query(
-    `with m as (delete from lesson_matches where id = $1 returning learner_id)
-     update lesson_requests set status = 'open' where id in (select learner_id from m)`,
-    [matchId],
-  );
-}
-
-// ---------------------------------------------------------------- lecture proposals, visits, callbacks
-
-export type LectureInput = {
-  name: string;
-  phone: string;
-  email: string | null;
-  topic: string;
-  language: string;
-  preferred_date: string | null;
-  description: string | null;
-  registered_by: string | null;
-};
-
-export async function createLectureProposal(db: Db, input: LectureInput) {
-  const code = newCode();
-  await db.query(
-    `insert into lecture_proposals (name, phone, email, topic, language, preferred_date, description, registered_by, code)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [input.name, input.phone, input.email, input.topic, input.language, input.preferred_date, input.description, input.registered_by, code],
-  );
-  return { code };
-}
-
-export const listLectureProposals = (db: Db) =>
-  db.query<LectureInput & { id: string; created_at: Date; status: string; code: string }>(
-    `select * from lecture_proposals order by created_at desc`,
-  );
-
-export type VisitInput = {
-  name: string;
-  organization: string | null;
-  email: string;
-  phone: string | null;
-  preferred_dates: string | null;
-  group_size: number | null;
-  notes: string | null;
-};
-
-export const createVisitRequest = (db: Db, v: VisitInput) =>
-  db.query(
-    `insert into visit_requests (name, organization, email, phone, preferred_dates, group_size, notes)
-     values ($1, $2, $3, $4, $5, $6, $7)`,
-    [v.name, v.organization, v.email, v.phone, v.preferred_dates, v.group_size, v.notes],
-  );
-
-export const listVisitRequests = (db: Db) =>
-  db.query<VisitInput & { id: string; created_at: Date; status: string }>(`select * from visit_requests order by created_at desc`);
+// ---------------------------------------------------------------- call-back requests
 
 export const createCallback = (db: Db, c: { name: string; phone: string; registered_by: string | null }) =>
   db.query(`insert into callback_requests (name, phone, registered_by) values ($1, $2, $3)`, [c.name, c.phone, c.registered_by]);
 
 export const listCallbacks = (db: Db) =>
   db.query<{ id: string; created_at: Date; name: string; phone: string; handled: boolean; registered_by: string | null }>(
-    `select * from callback_requests order by handled, created_at desc`,
+    `select id, created_at, name, phone, handled, registered_by from callback_requests order by handled, created_at desc`,
   );
 
 export const toggleCallbackHandled = (db: Db, id: string) =>
@@ -192,124 +66,156 @@ export const toggleCallbackHandled = (db: Db, id: string) =>
     [id],
   );
 
-/** Admin status changes for simple review lists. */
-const STATUS_TABLES = {
-  lecture: { table: "lecture_proposals", statuses: ["new", "accepted", "declined"] },
-  visit: { table: "visit_requests", statuses: ["new", "scheduled", "declined"] },
-  lesson: { table: "lesson_requests", statuses: ["open", "matched", "closed"] },
-} as const;
+// ---------------------------------------------------------------- 4-digit codes: lockout after 5 wrong tries
 
-export async function setReviewStatus(db: Db, kind: keyof typeof STATUS_TABLES, id: string, status: string) {
-  const { table, statuses } = STATUS_TABLES[kind];
-  if (!(statuses as readonly string[]).includes(status)) return false;
-  const rows = await db.query(`update ${table} set status = $2 where id = $1 returning id`, [id, status]);
-  return rows.length === 1;
+export const MAX_CODE_FAILURES = 5;
+export const CODE_LOCK_HOURS = 24;
+
+export async function codeLocked(db: Db, phone: string) {
+  const [row] = await db.query<{ locked: boolean }>(
+    `select exists (select 1 from code_lockouts where phone = $1 and locked_until > now()) as locked`,
+    [phone],
+  );
+  return row.locked;
 }
+
+/** Counts a wrong code for this phone; the 5th wrong code locks it for CODE_LOCK_HOURS. */
+export const recordCodeFailure = (db: Db, phone: string) =>
+  db.query(
+    `insert into code_lockouts (phone, failures) values ($1, 1)
+     on conflict (phone) do update set
+       failures = case when code_lockouts.locked_until < now() then 1 else code_lockouts.failures + 1 end,
+       locked_until = case
+         when code_lockouts.locked_until < now() then null
+         when code_lockouts.failures + 1 >= $2::int then now() + make_interval(hours => $3::int)
+         else code_lockouts.locked_until end,
+       updated_at = now()`,
+    [phone, MAX_CODE_FAILURES, CODE_LOCK_HOURS],
+  );
+
+export const clearCodeFailures = (db: Db, phone: string) => db.query(`delete from code_lockouts where phone = $1`, [phone]);
 
 // ---------------------------------------------------------------- status lookup by phone + code
 
 export type StatusItem =
-  | { type: "digital"; status: string; volunteer_first_name: string | null; approved: boolean }
+  | {
+      type: "digital";
+      status: string;
+      slot_date: string;
+      start_time: string;
+      end_time: string;
+      place_he: string;
+      place_en: string | null;
+      slot_status: string;
+    }
   | { type: "event"; status: string; title_he: string; date: string; time: string | null }
-  | { type: "podcast"; status: string }
-  | { type: "lecture"; status: string; topic: string }
-  | { type: "lesson"; status: string };
+  | { type: "podcast"; status: string };
 
 /** What a resident sees on the status page. Needs both phone and code; never returns contact details. */
 export async function lookupStatus(db: Db, phone: string, code: string): Promise<StatusItem[]> {
   const items: StatusItem[] = [];
-  for (const r of await db.query<{ status: string; first_name: string | null; approved: boolean }>(
-    `select r.status, split_part(trim(s.name), ' ', 1) as first_name, r.approved_at is not null as approved
-       from digital_requests r left join students s on s.id = r.student_id
-      where r.resident_phone = $1 and r.code = $2`,
+  for (const r of await db.query<Omit<Extract<StatusItem, { type: "digital" }>, "type">>(
+    `select b.status, to_char(s.slot_date, 'YYYY-MM-DD') as slot_date, s.start_time, s.end_time, s.place_he, s.place_en,
+            s.status as slot_status
+       from digital_bookings b join digital_slots s on s.id = b.slot_id
+      where b.phone = $1 and b.code = $2`,
     [phone, code],
   ))
-    items.push({ type: "digital", status: r.status, volunteer_first_name: r.approved ? r.first_name : null, approved: r.approved });
+    items.push({ type: "digital", ...r });
   for (const r of await db.query<{ status: string; event_title_he: string; event_date: string; event_time: string | null }>(
-    `select status, event_title_he, to_char(event_date, 'YYYY-MM-DD') as event_date, event_time
-       from event_registrations where phone = $1 and code = $2`,
+    `select status, event_title_he, event_date, event_time from event_registration_list where phone = $1 and code = $2`,
     [phone, code],
   ))
     items.push({ type: "event", status: r.status, title_he: r.event_title_he, date: r.event_date, time: r.event_time });
   for (const r of await db.query<{ status: string }>(
-    `select case when exists (select 1 from podcast_pair_members m where m.participant_id = p.id) then 'paired' else 'looking' end as status
-       from podcast_participants p where p.phone = $1 and p.code = $2 and p.active`,
+    `select case when status = 'paired' then 'paired' else 'looking' end as status
+       from podcast_people where phone = $1 and code = $2 and active`,
     [phone, code],
   ))
     items.push({ type: "podcast", status: r.status });
-  for (const r of await db.query<{ status: string; topic: string }>(
-    `select status, topic from lecture_proposals where phone = $1 and code = $2`,
-    [phone, code],
-  ))
-    items.push({ type: "lecture", status: r.status, topic: r.topic });
-  for (const r of await db.query<{ status: string }>(`select status from lesson_requests where phone = $1 and code = $2`, [phone, code]))
-    items.push({ type: "lesson", status: r.status });
   return items;
 }
 
-// ---------------------------------------------------------------- courses, timetable, announcements
+// ---------------------------------------------------------------- problem reports
 
-export type Course = {
+export type ProblemReport = {
   id: string;
-  title_en: string;
-  title_he: string;
-  description_en: string | null;
-  description_he: string | null;
-  active: boolean;
-  sort: number;
+  created_at: Date;
+  portal: "student" | "resident";
+  name: string | null;
+  contact: string | null;
+  message: string;
+  status: "new" | "handled";
 };
-export type Slot = {
-  id: string;
-  day: number;
-  start_time: string;
-  end_time: string | null;
-  title_en: string;
-  title_he: string;
-  location_en: string | null;
-  location_he: string | null;
-};
-export type Announcement = { id: string; text_en: string; text_he: string; active: boolean; expires_on: string | null };
 
-export const listCourses = (db: Db, activeOnly = true) =>
-  db.query<Course>(`select * from courses ${activeOnly ? "where active" : ""} order by sort, title_en`);
+export const createProblemReport = (db: Db, r: Pick<ProblemReport, "portal" | "name" | "contact" | "message">) =>
+  db.query(`insert into problem_reports (portal, name, contact, message) values ($1, $2, $3, $4)`, [
+    r.portal,
+    r.name,
+    r.contact,
+    r.message,
+  ]);
 
-export const addCourse = (db: Db, c: Omit<Course, "id" | "active" | "sort">) =>
+export const listProblemReports = (db: Db) =>
+  db.query<ProblemReport>(
+    `select id, created_at, portal, name, contact, message, status from problem_reports order by status, created_at desc`,
+  );
+
+export const markReportHandled = (db: Db, id: string) =>
+  db.query(`update problem_reports set status = 'handled', handled_at = now() where id = $1`, [id]);
+
+// ---------------------------------------------------------------- blocked people
+
+export type BlockedContact = { id: string; created_at: Date; kind: "phone" | "email"; value: string; reason: string | null; blocked_by: string };
+
+export const listBlocked = (db: Db) =>
+  db.query<BlockedContact>(`select id, created_at, kind, value, reason, blocked_by from blocked_contacts order by created_at desc`);
+
+export const blockContact = (db: Db, b: { kind: "phone" | "email"; value: string; reason: string | null; blocked_by: string }) =>
   db.query(
-    `insert into courses (title_en, title_he, description_en, description_he, sort)
-     values ($1, $2, $3, $4, (select coalesce(max(sort), 0) + 1 from courses))`,
-    [c.title_en, c.title_he, c.description_en, c.description_he],
+    `insert into blocked_contacts (kind, value, reason, blocked_by) values ($1, $2, $3, $4)
+     on conflict (kind, value) do update set reason = excluded.reason, blocked_by = excluded.blocked_by`,
+    [b.kind, b.kind === "email" ? b.value.toLowerCase() : b.value, b.reason, b.blocked_by],
   );
 
-export const deleteCourse = (db: Db, id: string) => db.query(`delete from courses where id = $1`, [id]);
+export const unblockContact = (db: Db, id: string) => db.query(`delete from blocked_contacts where id = $1`, [id]);
 
-export const listSlots = (db: Db) => db.query<Slot>(`select * from timetable_slots order by day, start_time`);
-
-export const addSlot = (db: Db, s: Omit<Slot, "id">) =>
-  db.query(
-    `insert into timetable_slots (day, start_time, end_time, title_en, title_he, location_en, location_he)
-     values ($1, $2, $3, $4, $5, $6, $7)`,
-    [s.day, s.start_time, s.end_time, s.title_en, s.title_he, s.location_en, s.location_he],
+/** True if the phone or email (either may be missing) was blocked by an admin. */
+export async function isBlocked(db: Db, phone: string | null | undefined, email: string | null | undefined) {
+  if (!phone && !email) return false;
+  const [row] = await db.query<{ blocked: boolean }>(
+    `select exists (select 1 from blocked_contacts
+                     where (kind = 'phone' and value = $1) or (kind = 'email' and value = lower($2))) as blocked`,
+    [phone ?? null, email ?? null],
   );
+  return row.blocked;
+}
 
-export const deleteSlot = (db: Db, id: string) => db.query(`delete from timetable_slots where id = $1`, [id]);
+// ---------------------------------------------------------------- audit log
 
-/** Active, unexpired announcements (Israel date). */
-export const listActiveAnnouncements = (db: Db) =>
-  db.query<Announcement>(
-    `select id, text_en, text_he, active, to_char(expires_on, 'YYYY-MM-DD') as expires_on from announcements
-      where active and (expires_on is null or expires_on >= (now() at time zone 'Asia/Jerusalem')::date)
-      order by created_at desc`,
-  );
+export type AuditEntry = { id: number; at: Date; actor: string; action: string; target: string | null; details: unknown };
 
-export const listAnnouncements = (db: Db) =>
-  db.query<Announcement>(
-    `select id, text_en, text_he, active, to_char(expires_on, 'YYYY-MM-DD') as expires_on from announcements order by created_at desc`,
-  );
+/** Records who did what in the admin area. Never pass phone numbers or emails of members of the public. */
+export const audit = (db: Db, actor: string, action: string, target: string | null = null, details: unknown = null) =>
+  db.query(`insert into audit_log (actor, action, target, details) values ($1, $2, $3, $4::text::jsonb)`, [
+    actor.slice(0, 200),
+    action.slice(0, 100),
+    target?.slice(0, 200) ?? null,
+    JSON.stringify(details),
+  ]);
 
-export const addAnnouncement = (db: Db, a: { text_en: string; text_he: string; expires_on: string | null }) =>
-  db.query(`insert into announcements (text_en, text_he, expires_on) values ($1, $2, $3)`, [a.text_en, a.text_he, a.expires_on]);
+export const listAudit = (db: Db, limit = 300) =>
+  db.query<AuditEntry>(`select id, at, actor, action, target, details from audit_log order by at desc limit $1::int`, [limit]);
 
-export const toggleAnnouncement = (db: Db, id: string) =>
-  db.query(`update announcements set active = not active where id = $1`, [id]);
+// ---------------------------------------------------------------- retention and deletion
 
-export const deleteAnnouncement = (db: Db, id: string) => db.query(`delete from announcements where id = $1`, [id]);
+export async function purgeOldData(db: Db) {
+  const [row] = await db.query<{ result: Record<string, number> }>(`select purge_old_data() as result`);
+  return row.result;
+}
+
+/** Deletes everything stored about one person (by phone and/or email). Returns counts per table. */
+export async function deletePersonData(db: Db, phone: string | null, email: string | null) {
+  const [row] = await db.query<{ result: Record<string, number> }>(`select delete_person_data($1, $2) as result`, [phone, email]);
+  return row.result;
+}

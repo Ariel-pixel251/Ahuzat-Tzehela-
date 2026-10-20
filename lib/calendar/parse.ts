@@ -4,23 +4,13 @@ import ICAL from "ical.js";
  * Calendar conventions (see README "How to add an event"):
  *   Title:        "English title | כותרת בעברית"
  *   Description:  English text, a line containing only "---", then Hebrew text
- *   Tags:         [game-night] [language-night] [podcast] [digital-support] [lecture] [party]
- *                 [visit] [memorial] [register]  (title or description)
+ *   Tags:         [game-night] [language-night] [podcast] [party] [lecture] [register]
+ *                 (title or description)
  *   Options:      [capacity: 30]  [closes: 2026-11-10]  [languages]  [tbc]
  * Tags and options are removed from the displayed text.
  */
 
-export const TAGS = [
-  "game-night",
-  "language-night",
-  "podcast",
-  "digital-support",
-  "lecture",
-  "party",
-  "visit",
-  "memorial",
-  "register",
-] as const;
+export const TAGS = ["game-night", "language-night", "podcast", "party", "lecture", "register"] as const;
 export type Tag = (typeof TAGS)[number];
 
 export type Bilingual = { en: string; he: string };
@@ -379,17 +369,15 @@ export function registrationOpen(event: CalendarEvent, now = new Date()): boolea
 }
 
 /** The form an event uses, from its tags. Null = no registration button. */
-export type EventForm = "language-night" | "game-night" | "memorial" | "general" | "podcast" | "digital-support";
+export type EventForm = "language-night" | "game-night" | "general" | "podcast";
 
 export function eventForm(event: Pick<CalendarEvent, "tags" | "offline">): EventForm | null {
   if (event.offline) return null;
   const t = event.tags;
   if (t.includes("language-night")) return "language-night";
   if (t.includes("game-night")) return "game-night";
-  if (t.includes("memorial")) return "memorial";
-  if (t.some((x) => x === "lecture" || x === "party" || x === "visit" || x === "register")) return "general";
+  if (t.some((x) => x === "lecture" || x === "party" || x === "register")) return "general";
   if (t.includes("podcast")) return "podcast";
-  if (t.includes("digital-support")) return "digital-support";
   return null;
 }
 

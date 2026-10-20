@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PrintIcon } from "@/components/icons";
 import { EventCard } from "@/components/residents/EventCard";
 import { buttonClass, Notice } from "@/components/ui";
 import { upcomingWithCounts } from "@/lib/event-data";
 import { residentsText as t } from "@/lib/i18n";
 
 export const metadata: Metadata = { title: t.events.title };
-export const revalidate = 600;
 
 /** The next 5 events as large cards; "לראות עוד" shows more. */
 export default async function ResidentEvents({ searchParams }: { searchParams: Promise<{ more?: string }> }) {
@@ -33,10 +31,6 @@ export default async function ResidentEvents({ searchParams }: { searchParams: P
             {t.events.more}
           </Link>
         )}
-        <Link href="/residents/events/print" className={`${buttonClass.secondary} w-full`}>
-          <PrintIcon className="size-7" />
-          {t.events.print}
-        </Link>
       </div>
     </>
   );

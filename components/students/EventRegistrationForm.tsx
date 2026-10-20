@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { registerStudentForEvent } from "@/app/actions/students";
-import { ActionForm, Checkbox, MultiSelect, SelectField, TextField } from "@/components/forms";
+import { ActionForm, MultiSelect, SelectField, TextField } from "@/components/forms";
 import { Notice } from "@/components/ui";
 import { LANGUAGES } from "@/config/languages";
-import { MEMORIAL_ROLES } from "@/config/options";
 import { sharedText, studentsText as t } from "@/lib/i18n";
+import { Consent } from "./Consent";
 
 const languageOptions = LANGUAGES.map((l) => ({ value: l.code, label: l.en }));
 
@@ -18,7 +17,7 @@ export function EventRegistrationForm({
 }: {
   eventKey: string;
   title: string;
-  form: "general" | "language-night" | "game-night" | "memorial";
+  form: "general" | "language-night" | "game-night";
   showLanguages: boolean;
 }) {
   const f = t.form;
@@ -65,22 +64,8 @@ export function EventRegistrationForm({
           options={[{ value: "none", label: sharedText.en.noPreference }, ...languageOptions.filter((o) => o.value !== "other")]}
         />
       )}
-      {form === "memorial" && (
-        <SelectField name="role" label={f.role} options={MEMORIAL_ROLES.student.map((r) => ({ value: r.code, label: r.en }))} />
-      )}
       <TextField name="notes" label={f.notes} multiline />
-      <Checkbox
-        name="consent"
-        required
-        label={
-          <>
-            {f.consent}{" "}
-            <Link href="/students/privacy" className="underline">
-              {f.privacyLink}
-            </Link>
-          </>
-        }
-      />
+      <Consent />
     </ActionForm>
   );
 }

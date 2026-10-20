@@ -2,19 +2,11 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { parseEmailList, readEnv } from "@/lib/env";
 import { supabasePublicKey, supabaseUrl } from "@/lib/supabase-config";
+import { adminSessionFresh, isAdminEmail } from "./admin-rules";
 
 export { supabasePublicKey, supabaseUrl };
-
-/** Admins (and leaders) are the emails listed in ADMIN_EMAILS, signed in with a Supabase magic link. */
-export function adminEmails(): string[] {
-  return parseEmailList(readEnv("ADMIN_EMAILS"));
-}
-
-export function isAdminEmail(email: string | null | undefined) {
-  return Boolean(email) && adminEmails().includes(email!.toLowerCase());
-}
+export { ADMIN_SESSION_HOURS, adminEmails, adminSessionFresh, isAdminEmail } from "./admin-rules";
 
 export function supabaseAuthConfigured() {
   return Boolean(supabaseUrl() && supabasePublicKey());
@@ -43,11 +35,13 @@ export async function supabaseServer() {
   });
 }
 
+/** The signed-in admin, checked on the server for every admin page, export and action. */
 export async function getAdmin(): Promise<{ email: string } | null> {
   if (supabaseAuthConfigured()) {
     const { data } = await (await supabaseServer()).auth.getUser();
     const email = data.user?.email;
-    return email && isAdminEmail(email) ? { email } : null;
+    if (!email || !isAdminEmail(email) || !adminSessionFresh(data.user?.last_sign_in_at)) return null;
+    return { email };
   }
   if (devLoginAllowed() && (await cookies()).get(DEV_ADMIN_COOKIE)?.value === "1") return { email: "dev-admin@localhost" };
   return null;

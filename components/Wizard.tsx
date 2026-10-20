@@ -1,19 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import { residentsText as t, sharedText } from "@/lib/i18n";
 import { formatPhone, normalizePhone } from "@/lib/phone";
 import { HONEYPOT, type ActionState } from "@/lib/form";
 import { DEFAULT_TIME_RANGE, formatHours } from "@/config/options";
 import { CheckIcon } from "./icons";
+import { bookedSlotLine } from "@/lib/slot-text";
 import { TimeRange } from "./TimeRange";
 import { buttonClass } from "./ui";
 
 // Resident forms: one question per screen, big choice buttons, a review screen, then a calm
 // confirmation with the request code. Nothing times out, nothing is cleared.
 
-export type WizardOption = { value: string; label: string };
+/** A choice; `detail` is a second line (e.g. places left), `disabled` can't be chosen (e.g. full). */
+export type WizardOption = { value: string; label: string; detail?: string; disabled?: boolean };
 
 export type WizardField =
   | { kind: "choice"; name: string; options: WizardOption[]; label?: string; optional?: boolean; defaultValue?: string; columns?: 1 | 2 }
@@ -105,6 +108,8 @@ export function Wizard({
   hidden = {},
   done,
   doneWaitlist,
+  doneDetail,
+  showCode = true,
   privacyHref = "/residents/privacy",
 }: {
   steps: WizardStep[];
@@ -112,8 +117,12 @@ export function Wizard({
   hidden?: Record<string, string>;
   done: string;
   doneWaitlist?: string;
+  /** an extra line on the confirmation, from the server's answer: "slot" shows the booked slot */
+  doneDetail?: "slot";
+  showCode?: boolean;
   privacyHref?: string;
 }) {
+  const router = useRouter();
   const [values, setValues] = useState<Values>(() => initialValues(steps));
   const [index, setIndex] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -146,6 +155,11 @@ export function Wizard({
     }
   }
 
+  // after a server error the choices may have changed (e.g. a slot filled up): load them again
+  useEffect(() => {
+    if (state && !state.ok && state.errors) router.refresh();
+  }, [state, router]);
+
   const set = (name: string, value: string | string[]) => {
     setValues((v) => ({ ...v, [name]: value }));
     setErrors((e) => ({ ...e, [name]: "" }));
@@ -177,7 +191,8 @@ export function Wizard({
           {t.wizard.thanks}
         </h2>
         <p className="mt-3 text-xl">{state.waitlist && doneWaitlist ? doneWaitlist : done}</p>
-        {state.code && (
+        {doneDetail === "slot" && bookedSlotLine(state.data) && <p className="mt-3 text-2xl font-extrabold">{bookedSlotLine(state.data)}</p>}
+        {showCode && state.code && (
           <div className="mx-auto mt-6 max-w-sm rounded-xl border-2 border-ink bg-white p-4">
             <p>{t.wizard.codeLabel}</p>
             <p className="text-5xl font-extrabold tracking-widest" dir="ltr">
@@ -387,14 +402,20 @@ function FieldView({
               role={multi ? undefined : "radio"}
               aria-checked={multi ? undefined : on}
               aria-pressed={multi ? on : undefined}
-              onClick={() => toggle(o.value)}
+              aria-disabled={o.disabled || undefined}
+              onClick={() => !o.disabled && toggle(o.value)}
               // the check mark has a small fixed-size spot in the corner, so a selected button keeps
               // its size and the label isn't squeezed (also with bigger text)
-              className={`relative flex min-h-16 min-w-0 items-center justify-center rounded-xl border-4 px-3 py-3 text-center text-xl font-bold ${
-                on ? "border-brand bg-brand text-white" : "border-ink bg-white text-ink hover:bg-sand"
+              className={`relative flex min-h-16 min-w-0 flex-col items-center justify-center rounded-xl border-4 px-3 py-3 text-center text-xl font-bold ${
+                o.disabled
+                  ? "cursor-not-allowed border-line bg-sand text-ink"
+                  : on
+                    ? "border-brand bg-brand text-white"
+                    : "border-ink bg-white text-ink hover:bg-sand"
               }`}
             >
               <span className="min-w-0 [overflow-wrap:anywhere] [word-break:keep-all]">{o.label}</span>
+              {o.detail && <span className="mt-1 text-lg font-normal">{o.detail}</span>}
               {on && <CheckIcon className="absolute end-[6px] top-[6px] size-[20px]" />}
             </button>
           );

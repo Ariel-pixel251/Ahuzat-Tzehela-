@@ -1,3 +1,4 @@
+import { BRAND } from "@/config/brand";
 import { readEnv } from "@/lib/env";
 
 export type SmtpSettings = { host: string; port: number; secure: boolean; user: string; pass: string; from: string };
@@ -16,5 +17,5 @@ export function smtpSettings(env: (name: string) => string | undefined = readEnv
   const port = Number(env("SMTP_PORT") ?? 465) || 465;
   // Google shows app passwords in groups of four ("abcd efgh ijkl mnop")
   if (/(^|\.)gmail\.com$|googlemail/i.test(host)) pass = pass.replace(/\s+/g, "");
-  return { host, port, secure: port === 465, user, pass, from: env("EMAIL_FROM") ?? `"אמיס - אחוזת צהלה - ביחד לדורות" <${user}>` };
+  return { host, port, secure: port === 465, user, pass, from: env("EMAIL_FROM") ?? `"${BRAND.he}" <${user}>` };
 }

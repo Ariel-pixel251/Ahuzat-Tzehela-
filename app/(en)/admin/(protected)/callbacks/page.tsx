@@ -3,14 +3,15 @@ import { toggleCallback } from "@/app/actions/admin";
 import { ActionButton } from "@/components/ActionButton";
 import { AdminSection, CsvLink, Table } from "@/components/admin";
 import { PageTitle } from "@/components/ui";
-import { getDb } from "@/lib/db/client";
+import { adminPage } from "@/lib/admin-page";
 import { listCallbacks } from "@/lib/db/misc";
 import { formatPhone } from "@/lib/phone";
 
 export const metadata: Metadata = { title: "Callback requests" };
 
 export default async function AdminCallbacks() {
-  const rows = await listCallbacks(await getDb());
+  const { db } = await adminPage("callbacks");
+  const rows = await listCallbacks(db);
   return (
     <>
       <PageTitle>Callback requests (&quot;צרו איתי קשר&quot;)</PageTitle>

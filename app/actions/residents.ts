@@ -1,36 +1,19 @@
 "use server";
 
 import { z } from "zod";
-import { DAYS, DIGITAL_NEEDS, formatHours, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, formatHours, PODCAST_TOPICS } from "@/config/options";
 import { LANGUAGES } from "@/config/languages";
 import { eventForm, getCalendar, getEvent } from "@/lib/calendar";
-import * as digitalDb from "@/lib/db/digital";
 import * as eventsDb from "@/lib/db/events";
-import { createCallback, listLessonTopics, lookupStatus } from "@/lib/db/misc";
-import type { Db } from "@/lib/db/types";
-import {
-  cancelEventRegistration,
-  createDigital,
-  createLecture,
-  createLesson,
-  joinPodcast,
-  registerEvent,
-} from "@/lib/domain";
+import { clearCodeFailures, codeLocked, createCallback, createProblemReport, isBlocked, lookupStatus, recordCodeFailure } from "@/lib/db/misc";
+import * as slotsDb from "@/lib/db/slots";
+import { bookDigital, cancelEventRegistration, joinPodcast, registerEvent } from "@/lib/domain";
 import type { ActionState } from "@/lib/form";
 import { residentsText, shared, studentsText } from "@/lib/i18n";
-import { allowed, getBaseUrl, localizeErrors, withDb } from "@/lib/server";
-import { formObject, isBot, v, validate } from "@/lib/validation";
+import { allowed, getBaseUrl, guardForm, invalid, withDb } from "@/lib/server";
+import { form, formObject, v, validate } from "@/lib/validation";
 
 const he = shared("he").errors;
-
-/** Honeypot and rate limit, shared by every resident form. Returns a state to stop, or null to go on. */
-async function guard(db: Db, fd: FormData, action: string): Promise<ActionState> {
-  // bots get a normal-looking answer and nothing is saved
-  if (isBot(fd)) return { ok: true, code: "0000" };
-  if (!(await allowed(db, `residents:${action}`))) return { ok: false, message: he.rateLimited };
-  return null;
-}
-
 const contact = { name: v.name, phone: v.phone(), email: v.optionalEmail };
 
 /** Availability as "English | עברית", following the site's bilingual convention. */
@@ -44,23 +27,24 @@ function availabilityText(days: string[], hours: string[]) {
 
 export async function registerResidentForEvent(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const stop = await guard(db, fd, "event");
+    const stop = await guardForm(db, fd, "residents:event", "he");
     if (stop) return stop;
-    const event = await getEvent(String(fd.get("event") ?? ""));
+    const key = v.eventKey.safeParse(fd.get("event"));
+    const event = key.success ? await getEvent(key.data) : null;
     if (!event) return { ok: false, message: he.notFound };
-    const form = eventForm(event);
-    const wantsLanguages = form === "language-night" || event.languages;
+    const kind = eventForm(event);
+    const wantsLanguages = kind === "language-night" || event.languages;
 
-    const schema = z.object({
+    const schema = form({
       ...contact,
+      event: v.eventKey,
       attendees: v.int(1, 10),
       languages: v.codes(LANGUAGES, { min: wantsLanguages ? 1 : 0 }),
       other_language: v.optionalText(60),
       preferred_language: v.optionalLanguage,
-      role: form === "memorial" ? v.choice(MEMORIAL_ROLES.resident.map((r) => r.code)) : z.string().optional(),
     });
     const r = validate(schema, formObject(fd, ["languages"]));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
+    if (!r.ok) return invalid(r.errors, "he");
 
     const res = await registerEvent(
       db,
@@ -74,49 +58,53 @@ export async function registerResidentForEvent(_: ActionState, fd: FormData): Pr
         notes: null,
         languages: r.data.languages,
         other_language: r.data.other_language,
-        preferred_language: form === "game-night" ? r.data.preferred_language : null,
-        role: form === "memorial" ? (r.data.role ?? null) : null,
+        preferred_language: kind === "game-night" ? r.data.preferred_language : null,
         registered_by: null,
       },
       await getBaseUrl(),
     );
-    if (!("code" in res)) return { ok: false, message: { duplicate: he.duplicate, closed: he.closed, "not-registrable": he.notFound }[res.status] };
+    if (!("code" in res)) {
+      const messages = { duplicate: he.duplicate, closed: he.closed, "not-registrable": he.notFound, blocked: he.unavailable };
+      return { ok: false, message: messages[res.status] };
+    }
     return { ok: true, code: res.code, waitlist: res.status === "waitlist" };
   });
 }
 
-// ---------------------------------------------------------------- digital support
+// ---------------------------------------------------------------- digital support: book a slot
 
-export async function requestHelp(_: ActionState, fd: FormData): Promise<ActionState> {
+export async function bookHelpSlot(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const stop = await guard(db, fd, "help");
+    const stop = await guardForm(db, fd, "residents:help", "he");
     if (stop) return stop;
-    const schema = z.object({
+    const schema = form({
       ...contact,
+      slot: v.uuid,
       needs: v.codes(DIGITAL_NEEDS, { min: 1 }),
       needs_other: v.optionalText(300),
-      days: v.codes(DAYS),
-      hours: v.timeChoice,
-      language: v.language,
     });
-    const r = validate(schema, formObject(fd, ["needs", "days"]));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
-    const res = await createDigital(
+    const r = validate(schema, formObject(fd, ["needs"]));
+    if (!r.ok) return invalid(r.errors, "he");
+    const res = await bookDigital(
       db,
+      r.data.slot,
       {
-        resident_name: r.data.name,
-        resident_phone: r.data.phone,
-        resident_email: r.data.email,
+        name: r.data.name,
+        phone: r.data.phone,
+        email: r.data.email,
         needs: r.data.needs,
         needs_other: r.data.needs_other,
-        preferred_days: r.data.days,
-        preferred_parts: r.data.hours,
-        language: r.data.language,
         registered_by: null,
       },
       await getBaseUrl(),
     );
-    return { ok: true, code: res.code };
+    if (res.status === "booked") {
+      const slot = await slotsDb.getSlot(db, r.data.slot);
+      return { ok: true, code: res.code, data: slot ? { slot: { slot_date: slot.slot_date, start_time: slot.start_time, end_time: slot.end_time, place_he: slot.place_he, place_en: slot.place_en } } : undefined };
+    }
+    const messages = { not_found: he.slotClosed, closed: he.slotClosed, full: he.slotFull, duplicate: he.slotDuplicate, blocked: he.unavailable };
+    // send the person back to the time question, where they can pick another slot
+    return { ok: false, message: messages[res.status], errors: { slot: messages[res.status] } };
   });
 }
 
@@ -124,9 +112,9 @@ export async function requestHelp(_: ActionState, fd: FormData): Promise<ActionS
 
 export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const stop = await guard(db, fd, "podcast");
+    const stop = await guardForm(db, fd, "residents:podcast", "he");
     if (stop) return stop;
-    const schema = z.object({
+    const schema = form({
       ...contact,
       topics: v.codes(PODCAST_TOPICS, { min: 1 }),
       language: v.language,
@@ -134,7 +122,7 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
       hours: v.timeChoice,
     });
     const r = validate(schema, formObject(fd, ["topics", "days"]));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
+    if (!r.ok) return invalid(r.errors, "he");
     const res = await joinPodcast(
       db,
       {
@@ -149,27 +137,8 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
       },
       await getBaseUrl(),
     );
+    if (res === "blocked") return { ok: false, message: he.unavailable };
     if (!res) return { ok: false, message: he.alreadyJoined };
-    return { ok: true, code: res.code };
-  });
-}
-
-// ---------------------------------------------------------------- lecture proposal
-
-export async function proposeLecture(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withDb("he", async (db) => {
-    const stop = await guard(db, fd, "lecture");
-    if (stop) return stop;
-    const schema = z.object({
-      ...contact,
-      topic: v.text(200),
-      language: v.language,
-      preferred_date: v.optionalText(100),
-      description: v.optionalText(1000),
-    });
-    const r = validate(schema, formObject(fd));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
-    const res = await createLecture(db, { ...r.data, registered_by: null });
     return { ok: true, code: res.code };
   });
 }
@@ -178,39 +147,31 @@ export async function proposeLecture(_: ActionState, fd: FormData): Promise<Acti
 
 export async function requestCallback(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const stop = await guard(db, fd, "callback");
+    const stop = await guardForm(db, fd, "residents:callback", "he");
     if (stop) return stop;
-    const r = validate(z.object({ name: v.name, phone: v.phone() }), formObject(fd));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
+    const r = validate(form({ name: v.name, phone: v.phone() }), formObject(fd));
+    if (!r.ok) return invalid(r.errors, "he");
+    if (await isBlocked(db, r.data.phone, null)) return { ok: false, message: he.unavailable };
     await createCallback(db, { ...r.data, registered_by: null });
     return { ok: true };
   });
 }
 
-// ---------------------------------------------------------------- private lessons
+// ---------------------------------------------------------------- report a problem
 
-export async function requestLesson(_: ActionState, fd: FormData): Promise<ActionState> {
+export async function reportProblemAsResident(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const stop = await guard(db, fd, "lesson");
+    const stop = await guardForm(db, fd, "residents:report", "he", { max: 5 });
     if (stop) return stop;
-    const topics = (await listLessonTopics(db)).map((t) => ({ code: t.id }));
-    const schema = z
-      .object({ ...contact, topics: v.codes(topics), other_topic: v.optionalText(200) })
-      .refine((d) => d.topics.length > 0 || d.other_topic, { message: "choose", path: ["topics"] });
-    const r = validate(schema, formObject(fd, ["topics"]));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
-    const res = await createLesson(db, {
-      role: "learn",
-      portal: "resident",
-      name: r.data.name,
-      phone: r.data.phone,
-      email: r.data.email,
-      topics: r.data.topics,
-      other_topic: r.data.other_topic,
-      notes: null,
-      registered_by: null,
+    const schema = form({
+      message: v.text(2000, { multiline: true }),
+      name: v.optionalText(100),
+      phone: v.optionalPhone(),
     });
-    return { ok: true, code: res.code };
+    const r = validate(schema, formObject(fd));
+    if (!r.ok) return invalid(r.errors, "he");
+    await createProblemReport(db, { portal: "resident", name: r.data.name, contact: r.data.phone, message: r.data.message });
+    return { ok: true };
   });
 }
 
@@ -218,32 +179,42 @@ export async function requestLesson(_: ActionState, fd: FormData): Promise<Actio
 
 export async function checkStatus(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    // stricter limit: a 4-digit code must not be guessable
+    // a 4-digit code must not be guessable: few tries per connection, and 5 wrong codes lock the phone number
     if (!(await allowed(db, "residents:status", 10, 3600))) return { ok: false, message: he.rateLimited };
-    const r = validate(z.object({ phone: v.phone(), code: z.string().trim().regex(/^\d{4}$/, "text") }), formObject(fd));
-    if (!r.ok) return { ok: false, errors: localizeErrors(r.errors, "he") };
+    const r = validate(form({ phone: v.phone(), code: z.string().trim().regex(/^\d{4}$/, "text") }), formObject(fd));
+    if (!r.ok) return invalid(r.errors, "he");
+    if (await codeLocked(db, r.data.phone)) return { ok: false, message: he.locked };
     const items = await lookupStatus(db, r.data.phone, r.data.code);
-    if (!items.length) return { ok: false, message: residentsText.pages.status.notFound };
+    if (!items.length) {
+      await recordCodeFailure(db, r.data.phone);
+      return { ok: false, message: residentsText.pages.status.notFound };
+    }
+    await clearCodeFailures(db, r.data.phone);
     return { ok: true, data: items };
   });
 }
 
-// ---------------------------------------------------------------- edit links (only for residents who gave an email)
+// ---------------------------------------------------------------- cancel links (only for people who gave an email)
 
 export async function cancelHelpByToken(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
-    const ok = await digitalDb.cancelDigitalRequestByToken(db, String(fd.get("token") ?? ""));
-    return ok ? { ok: true, message: residentsText.pages.manage.cancelled } : { ok: false, message: residentsText.pages.manage.invalid };
+    const t = residentsText.pages.manage;
+    const token = v.token.safeParse(fd.get("token"));
+    if (!token.success) return { ok: false, message: t.invalid };
+    const booking = await slotsDb.getBookingByToken(db, token.data);
+    if (!booking || !(await slotsDb.cancelBooking(db, booking.id))) return { ok: false, message: t.invalid };
+    return { ok: true, message: t.cancelled };
   });
 }
 
 export async function cancelRegistrationByToken(_: ActionState, fd: FormData): Promise<ActionState> {
   const locale = fd.get("locale") === "en" ? "en" : "he";
   return withDb(locale, async (db) => {
-    const reg = await eventsDb.getRegistrationByToken(db, String(fd.get("token") ?? ""));
-    if (!reg || reg.status === "cancelled") {
-      return { ok: false, message: locale === "en" ? studentsText.manage.invalid : residentsText.pages.manage.invalid };
-    }
+    const invalidLink = locale === "en" ? studentsText.manage.invalid : residentsText.pages.manage.invalid;
+    const token = v.token.safeParse(fd.get("token"));
+    if (!token.success) return { ok: false, message: invalidLink };
+    const reg = await eventsDb.getRegistrationByToken(db, token.data);
+    if (!reg || reg.status === "cancelled") return { ok: false, message: invalidLink };
     await cancelEventRegistration(db, reg, await getCalendar());
     return { ok: true };
   });

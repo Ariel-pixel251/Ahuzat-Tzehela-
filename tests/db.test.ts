@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import * as digital from "@/lib/db/digital";
 import * as events from "@/lib/db/events";
-import { hitRateLimit, lookupStatus, matchLesson, createLessonRequest } from "@/lib/db/misc";
+import { hitRateLimit, lookupStatus } from "@/lib/db/misc";
 import * as podcast from "@/lib/db/podcast";
+import * as slots from "@/lib/db/slots";
 import { createLoginToken, exchangeLoginToken, getStudentBySession, upsertStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
 import { testDb } from "./helpers/db";
@@ -12,78 +12,31 @@ beforeEach(async () => {
   db = await testDb();
 });
 
-const resident = (n: number): digital.DigitalInput => ({
-  resident_name: `Rivka Cohen ${n}`,
-  resident_phone: `050123456${n}`,
-  resident_email: null,
-  needs: ["whatsapp"],
-  needs_other: null,
-  preferred_days: ["sun"],
-  preferred_parts: ["morning"],
-  language: "he",
-  registered_by: null,
-});
-
 const student = (n: number) => upsertStudent(db, { name: `Student ${n}`, email: `s${n}@emis.test`, phone: null });
 
-describe("digital support claiming", () => {
-  test("only one student gets a request, even when both claim at the same time", async () => {
-    const { id } = await digital.createDigitalRequest(db, resident(1));
-    const [a, b] = await Promise.all([student(1), student(2)]);
-    const results = await Promise.all([
-      digital.claimDigitalRequest(db, id, a.id, true),
-      digital.claimDigitalRequest(db, id, b.id, true),
-    ]);
-    expect(results.filter(Boolean)).toHaveLength(1);
-    const row = await digital.getDigitalRequest(db, id);
-    expect(row?.status).toBe("assigned");
-    expect(row?.student_id).toBe(results[0] ? a.id : b.id);
-  });
-
-  test("a second claim on an assigned request fails", async () => {
-    const { id } = await digital.createDigitalRequest(db, resident(1));
-    const a = await student(1);
-    const b = await student(2);
-    expect(await digital.claimDigitalRequest(db, id, a.id, true)).toBe(true);
-    expect(await digital.claimDigitalRequest(db, id, b.id, true)).toBe(false);
-  });
-
-  test("release reopens the request; only the assignee can release", async () => {
-    const { id } = await digital.createDigitalRequest(db, resident(1));
-    const a = await student(1);
-    const b = await student(2);
-    await digital.claimDigitalRequest(db, id, a.id, true);
-    expect(await digital.releaseDigitalRequest(db, id, b.id)).toBe(false);
-    expect(await digital.releaseDigitalRequest(db, id, a.id)).toBe(true);
-    expect((await digital.getDigitalRequest(db, id))?.status).toBe("open");
-    expect(await digital.claimDigitalRequest(db, id, b.id, true)).toBe(true);
-  });
-
-  test("with approval on, a claim waits for a leader before it can be completed", async () => {
-    const { id } = await digital.createDigitalRequest(db, resident(1));
-    const a = await student(1);
-    await digital.claimDigitalRequest(db, id, a.id, false);
-    expect((await digital.getDigitalRequest(db, id))?.approved_at).toBeNull();
-    expect(await digital.completeDigitalRequest(db, id, a.id)).toBe(false);
-    expect(await digital.approveDigitalMatch(db, id)).toBe(true);
-    expect(await digital.completeDigitalRequest(db, id, a.id)).toBe(true);
-  });
-
-  test("the public board never includes contact details or full names", async () => {
-    await digital.createDigitalRequest(db, { ...resident(1), resident_email: "r@example.com" });
-    const [row] = await digital.listOpenDigitalRequests(db);
-    expect(row.first_name).toBe("Rivka");
-    expect(JSON.stringify(row)).not.toMatch(/0501234561|r@example\.com|Cohen/);
-  });
-
-  test("admin can reassign to another student", async () => {
-    const { id } = await digital.createDigitalRequest(db, resident(1));
-    const a = await student(1);
-    const b = await student(2);
-    await digital.claimDigitalRequest(db, id, a.id, true);
-    expect(await digital.adminAssignDigitalRequest(db, id, b.id)).toBe(true);
-    expect((await digital.getDigitalRequest(db, id))?.student_id).toBe(b.id);
-  });
+const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+const slotInput = (over: Partial<slots.SlotInput> = {}): slots.SlotInput => ({
+  slot_date: inDays(5),
+  start_time: "16:00",
+  end_time: "17:30",
+  place_he: "בחדר הקהילה",
+  place_en: "Community room",
+  resident_places: 3,
+  helpers_needed: 2,
+  note_en: null,
+  note_he: null,
+  booking_open: true,
+  closes_hours_before: 24,
+  ...over,
+});
+const booking = (n: number, over: Partial<slots.BookingInput> = {}): slots.BookingInput => ({
+  name: `Rivka Cohen ${n}`,
+  phone: `050123456${n}`,
+  email: null,
+  needs: ["whatsapp"],
+  needs_other: null,
+  registered_by: null,
+  ...over,
 });
 
 describe("podcast pairs", () => {
@@ -175,7 +128,6 @@ describe("event registration capacity and waiting list", () => {
     languages: [],
     other_language: null,
     preferred_language: null,
-    role: null,
     registered_by: null,
   });
 
@@ -222,31 +174,26 @@ describe("event registration capacity and waiting list", () => {
 });
 
 describe("tokens and request codes", () => {
-  test("an edit link token is created only when there is an email, and finds the registration", async () => {
-    const withEmail = await digital.createDigitalRequest(db, { ...resident(1), resident_email: "r@example.com" });
-    const without = await digital.createDigitalRequest(db, resident(2));
+  test("an edit link token is created only when there is an email, and finds the booking", async () => {
+    const id = (await slots.createSlot(db, slotInput()))!;
+    const withEmail = await slots.bookSlot(db, id, booking(1, { email: "r@example.com" }));
+    const without = await slots.bookSlot(db, id, booking(2));
+    if (withEmail.status !== "booked" || without.status !== "booked") throw new Error("not booked");
     expect(withEmail.token).toBeTruthy();
     expect(without.token).toBeNull();
-    expect((await digital.getDigitalRequestByToken(db, withEmail.token!))?.id).toBe(withEmail.id);
-    expect(await digital.getDigitalRequestByToken(db, "not-a-real-token")).toBeNull();
+    expect((await slots.getBookingByToken(db, withEmail.token!))?.id).toBe(withEmail.id);
+    expect(await slots.getBookingByToken(db, "not-a-real-token")).toBeNull();
     expect(withEmail.code).toMatch(/^\d{4}$/);
   });
 
   test("a status lookup needs both the phone and the code", async () => {
-    const { code } = await digital.createDigitalRequest(db, resident(1));
-    expect(await lookupStatus(db, "0501234561", code)).toHaveLength(1);
-    expect(await lookupStatus(db, "0509999999", code)).toHaveLength(0);
-    const wrong = code === "1000" ? "1001" : "1000";
+    const id = (await slots.createSlot(db, slotInput()))!;
+    const res = await slots.bookSlot(db, id, booking(1));
+    if (res.status !== "booked") throw new Error("not booked");
+    expect(await lookupStatus(db, "0501234561", res.code)).toHaveLength(1);
+    expect(await lookupStatus(db, "0509999999", res.code)).toHaveLength(0);
+    const wrong = res.code === "1000" ? "1001" : "1000";
     expect(await lookupStatus(db, "0501234561", wrong)).toHaveLength(0);
-  });
-
-  test("the volunteer's first name shows only after the match is approved", async () => {
-    const { id, code } = await digital.createDigitalRequest(db, resident(1));
-    const s = await student(1);
-    await digital.claimDigitalRequest(db, id, s.id, false);
-    expect((await lookupStatus(db, "0501234561", code))[0]).toMatchObject({ volunteer_first_name: null });
-    await digital.approveDigitalMatch(db, id);
-    expect((await lookupStatus(db, "0501234561", code))[0]).toMatchObject({ volunteer_first_name: "Student" });
   });
 
   test("student login links work once and give a session", async () => {
@@ -275,14 +222,5 @@ describe("misc", () => {
     const results = [];
     for (let i = 0; i < 4; i++) results.push(await hitRateLimit(db, "test:ip", 3, 60));
     expect(results).toEqual([true, true, true, false]);
-  });
-
-  test("a learner gets at most one lesson match", async () => {
-    const base = { portal: "resident" as const, email: null, other_topic: null, notes: null, registered_by: null, topics: [] };
-    const learner = await createLessonRequest(db, { ...base, role: "learn", name: "L", phone: "0501111111" });
-    const t1 = await createLessonRequest(db, { ...base, role: "teach", name: "T1", phone: "0502222222" });
-    const t2 = await createLessonRequest(db, { ...base, role: "teach", name: "T2", phone: "0503333333" });
-    expect(await matchLesson(db, learner.id, t1.id, null)).toBe(true);
-    expect(await matchLesson(db, learner.id, t2.id, null)).toBe(false);
   });
 });

@@ -1,25 +1,18 @@
 import "server-only";
-import { DIGITAL_NEEDS, optionLabel } from "@/config/options";
-import {
-  eventForm,
-  registrationOpen,
-  todayInJerusalem,
-  type CalendarData,
-  type CalendarEvent,
-} from "@/lib/calendar";
-import * as digital from "@/lib/db/digital";
+import { eventForm, registrationOpen, todayInJerusalem, type CalendarData, type CalendarEvent } from "@/lib/calendar";
 import * as events from "@/lib/db/events";
 import * as misc from "@/lib/db/misc";
 import * as podcast from "@/lib/db/podcast";
+import * as slots from "@/lib/db/slots";
 import { getStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
-import { formatEventWhen } from "@/lib/i18n/format";
+import { formatDateTime, formatEventWhen, formatSlot } from "@/lib/i18n/format";
 import type { Locale } from "@/lib/i18n";
-import { notify } from "@/lib/notify";
+import { notify, type Recipient } from "@/lib/notify";
 import { templates } from "@/lib/notify/templates";
 import { formatPhone } from "@/lib/phone";
 
-// Business logic shared by the portals and the admin "register on behalf" screen.
+// Business logic shared by the portals and the admin screens.
 
 const portalPath = (portal: "student" | "resident") => (portal === "student" ? "students" : "residents");
 const localeOf = (portal: "student" | "resident"): Locale => (portal === "student" ? "en" : "he");
@@ -29,22 +22,12 @@ const firstName = (name: string) => name.trim().split(/\s+/)[0];
 
 export type EventPersonInput = Pick<
   events.RegistrationInput,
-  | "portal"
-  | "name"
-  | "phone"
-  | "email"
-  | "attendees"
-  | "notes"
-  | "languages"
-  | "other_language"
-  | "preferred_language"
-  | "role"
-  | "registered_by"
+  "portal" | "name" | "phone" | "email" | "attendees" | "notes" | "languages" | "other_language" | "preferred_language" | "registered_by"
 >;
 
 export type RegisterEventResult =
   | { status: "confirmed" | "waitlist"; code: string }
-  | { status: "duplicate" | "closed" | "not-registrable" };
+  | { status: "duplicate" | "closed" | "not-registrable" | "blocked" };
 
 export async function registerEvent(
   db: Db,
@@ -54,8 +37,9 @@ export async function registerEvent(
   { ignoreDeadline = false } = {},
 ): Promise<RegisterEventResult> {
   const form = eventForm(event);
-  if (!form || form === "podcast" || form === "digital-support") return { status: "not-registrable" };
+  if (!form || form === "podcast") return { status: "not-registrable" };
   if (!ignoreDeadline && !registrationOpen(event)) return { status: "closed" };
+  if (await misc.isBlocked(db, person.phone, person.email)) return { status: "blocked" };
 
   const res = await events.registerForEvent(
     db,
@@ -161,71 +145,165 @@ export async function sendReminders(db: Db, calendar: CalendarData, now = new Da
   return sent;
 }
 
-// ---------------------------------------------------------------- digital support
+// ---------------------------------------------------------------- digital support slots
 
-export async function createDigital(db: Db, input: digital.DigitalInput, baseUrl: string) {
-  const res = await digital.createDigitalRequest(db, input);
-  await notify(
-    db,
-    { name: input.resident_name, phone: input.resident_phone, email: input.resident_email, portal: "resident" },
-    templates.residentReceived({
-      name: firstName(input.resident_name),
-      what: "עזרה עם הטלפון או המחשב",
-      code: res.code,
-      manageUrl: res.token ? `${baseUrl}/residents/manage/help?token=${res.token}` : null,
-    }),
-  );
+const resident = (p: { name: string; phone: string; email: string | null }): Recipient => ({ ...p, portal: "resident" });
+const student = (p: { name: string; phone: string | null; email: string | null }): Recipient => ({ ...p, portal: "student" });
+
+export type BookDigitalResult = Awaited<ReturnType<typeof slots.bookSlot>> | { status: "blocked" };
+
+/** A resident books a place in a slot (atomically), then gets a confirmation with the code. */
+export async function bookDigital(db: Db, slotId: string, input: slots.BookingInput, baseUrl: string, { staff = false } = {}): Promise<BookDigitalResult> {
+  if (await misc.isBlocked(db, input.phone, input.email)) return { status: "blocked" };
+  const res = await slots.bookSlot(db, slotId, input, { staff });
+  if (res.status !== "booked") return res;
+  const slot = await slots.getSlot(db, slotId);
+  if (slot) {
+    await notify(
+      db,
+      resident(input),
+      templates.slotBooked({
+        name: firstName(input.name),
+        slot: formatSlot(slot, "he"),
+        code: res.code,
+        manageUrl: res.token ? `${baseUrl}/residents/manage/help?token=${res.token}` : null,
+      }),
+    );
+  }
   return res;
 }
 
-export async function requireMatchApproval(db: Db) {
-  return Boolean(await misc.getSetting(db, "require_match_approval", false));
+export async function helperApprovalRequired(db: Db) {
+  return Boolean(await misc.getSetting(db, "require_helper_approval", false));
 }
 
-/** Student takes a request. Returns "taken", "pending-approval" or "unavailable". */
-export async function claimDigital(db: Db, requestId: string, studentId: string, baseUrl: string) {
-  const autoApprove = !(await requireMatchApproval(db));
-  const ok = await digital.claimDigitalRequest(db, requestId, studentId, autoApprove);
-  if (!ok) return "unavailable" as const;
-  if (!autoApprove) return "pending-approval" as const;
-  await notifyDigitalMatch(db, requestId, baseUrl);
-  return "taken" as const;
+export async function studentCancelCutoffHours(db: Db) {
+  const n = Number(await misc.getSetting(db, "student_cancel_cutoff_hours", 24));
+  return Number.isFinite(n) && n >= 0 ? n : 24;
 }
 
-export async function approveDigital(db: Db, requestId: string, baseUrl: string) {
-  if (await digital.approveDigitalMatch(db, requestId)) await notifyDigitalMatch(db, requestId, baseUrl);
+/** A student volunteers for a slot (atomically, within the number of helpers needed). */
+export async function volunteerForSlot(db: Db, slotId: string, s: { id: string; name: string; email: string | null; phone: string | null }, baseUrl: string) {
+  if (await misc.isBlocked(db, s.phone, s.email)) return "blocked" as const;
+  const result = await slots.volunteer(db, slotId, s.id, { autoApprove: !(await helperApprovalRequired(db)) });
+  if (result === "confirmed" || result === "pending") {
+    const slot = await slots.getSlot(db, slotId);
+    if (slot) {
+      await notify(db, student(s), templates.slotVolunteered({
+        name: firstName(s.name),
+        slot: formatSlot(slot, "en"),
+        pending: result === "pending",
+        url: `${baseUrl}/students/mine`,
+      }));
+    }
+  }
+  return result;
 }
 
-export async function adminAssignDigital(db: Db, requestId: string, studentId: string | null, baseUrl: string) {
-  const ok = await digital.adminAssignDigitalRequest(db, requestId, studentId);
-  if (ok && studentId) await notifyDigitalMatch(db, requestId, baseUrl);
-  return ok;
+/**
+ * Admin: put a student into a slot (confirmed at once; the student needn't have signed up).
+ * With `notify`, the student is told when and where, and who is booked so far.
+ */
+export async function adminAddVolunteer(db: Db, slotId: string, studentId: string, { notify: send = false, baseUrl = "" } = {}) {
+  const result = await slots.volunteer(db, slotId, studentId, { autoApprove: true, staff: true });
+  if (result === "confirmed" && send) {
+    const [slot, s, names] = await Promise.all([slots.getSlot(db, slotId), getStudent(db, studentId), slots.listBookedFirstNames(db, slotId)]);
+    if (slot && s) {
+      await notify(db, student(s), templates.helperAssigned({
+        name: firstName(s.name),
+        slot: formatSlot(slot, "en"),
+        residents: names.map((n) => n.first_name),
+        url: `${baseUrl}/students/mine`,
+      }));
+    }
+  }
+  return result;
 }
 
-async function notifyDigitalMatch(db: Db, requestId: string, baseUrl: string) {
-  const r = await digital.getDigitalRequest(db, requestId);
-  const s = r?.student_id ? await getStudent(db, r.student_id) : null;
-  if (!r || !s) return;
-  await notify(
-    db,
-    { name: r.resident_name, phone: r.resident_phone, email: r.resident_email, portal: "resident" },
-    templates.digitalAssignedResident({ name: firstName(r.resident_name), volunteer: firstName(s.name) }),
+export async function approveVolunteer(db: Db, volunteerId: string, baseUrl: string) {
+  if (!(await slots.approveVolunteer(db, volunteerId))) return false;
+  const v = await slots.getVolunteer(db, volunteerId);
+  const slot = v ? await slots.getSlot(db, v.slot_id) : null;
+  if (v && slot) {
+    await notify(db, student({ name: v.student_name, phone: v.student_phone, email: v.student_email }), templates.slotVolunteered({
+      name: firstName(v.student_name),
+      slot: formatSlot(slot, "en"),
+      pending: false,
+      url: `${baseUrl}/students/mine`,
+    }));
+  }
+  return true;
+}
+
+/** Tells everyone in a slot that it changed (time, date or place) or was cancelled. */
+async function noticeToSlotPeople(db: Db, people: slots.SlotPerson[], message: (locale: Locale, name: string) => ReturnType<typeof templates.slotCancelled>) {
+  for (const p of people) {
+    const locale: Locale = p.kind === "resident" ? "he" : "en";
+    const to = p.kind === "resident" ? resident(p) : student(p);
+    await notify(db, to, message(locale, firstName(p.name)));
+  }
+  return people.length;
+}
+
+/** Admin: cancels a slot (bookings and volunteers too) and tells everyone affected. */
+export async function cancelSlotAndNotify(db: Db, slotId: string) {
+  const slot = await slots.getSlot(db, slotId);
+  if (!slot || slot.status !== "scheduled") return null;
+  const people = await slots.listSlotPeople(db, slotId);
+  if (!(await slots.cancelSlot(db, slotId))) return null;
+  return noticeToSlotPeople(db, people, (locale, name) => templates.slotCancelled(locale, { name, slot: formatSlot(slot, locale) }));
+}
+
+/** Admin: edits a slot; if the date, time or place moved, tells everyone in it. */
+export async function updateSlotAndNotify(db: Db, slotId: string, input: slots.SlotInput) {
+  const before = await slots.updateSlot(db, slotId, input);
+  if (!before) return null;
+  const moved =
+    before.slot_date !== input.slot_date ||
+    before.start_time !== input.start_time ||
+    before.end_time !== input.end_time ||
+    before.place_he !== input.place_he ||
+    (before.place_en ?? null) !== input.place_en;
+  if (!moved) return 0;
+  const people = await slots.listSlotPeople(db, slotId);
+  return noticeToSlotPeople(db, people, (locale, name) =>
+    templates.slotChanged(locale, { name, before: formatSlot(before, locale), after: formatSlot(input, locale) }),
   );
-  await notify(
-    db,
-    { name: s.name, email: s.email, portal: "student" },
-    templates.digitalAssignedStudent({
-      name: firstName(s.name),
-      resident: firstName(r.resident_name),
-      needs: r.needs.map((n) => optionLabel(DIGITAL_NEEDS, n, "en")).join(", "),
-      url: `${baseUrl}/students/digital/mine`,
-    }),
-  );
+}
+
+/** Admin: blocks a date (holiday) and cancels any slots on it, telling the people in them. */
+export async function blockDateAndCancel(db: Db, day: string, reason: string | null) {
+  await slots.addBlockedDate(db, day, reason);
+  let notified = 0;
+  const ids = await slots.listSlotIdsOn(db, day);
+  for (const { id } of ids) notified += (await cancelSlotAndNotify(db, id)) ?? 0;
+  return { cancelled: ids.length, notified };
+}
+
+/** Day-before reminders for slots (residents and confirmed volunteers). */
+export async function sendSlotReminders(db: Db) {
+  let sent = 0;
+  for (const { id } of await slots.listTomorrowSlotIds(db)) {
+    const slot = await slots.getSlot(db, id);
+    if (!slot) continue;
+    for (const b of await slots.listBookingsNeedingReminder(db, id)) {
+      await notify(db, resident(b), templates.slotReminder("he", { name: firstName(b.name), slot: formatSlot(slot, "he") }));
+      await slots.markBookingReminded(db, b.id);
+      sent++;
+    }
+    for (const v of await slots.listVolunteersNeedingReminder(db, id)) {
+      await notify(db, student(v), templates.slotReminder("en", { name: firstName(v.name), slot: formatSlot(slot, "en") }));
+      await slots.markVolunteerReminded(db, v.id);
+      sent++;
+    }
+  }
+  return sent;
 }
 
 // ---------------------------------------------------------------- podcast
 
 export async function joinPodcast(db: Db, input: podcast.ParticipantInput, baseUrl: string) {
+  if (await misc.isBlocked(db, input.phone, input.email)) return "blocked" as const;
   const res = await podcast.joinPodcast(db, input);
   if (!res) return null;
   const locale = localeOf(input.portal);
@@ -262,9 +340,33 @@ export async function respondPodcastRequest(db: Db, requestId: string, toId: str
   return result;
 }
 
-export async function adminPairPodcast(db: Db, a: string, b: string) {
+/**
+ * Admin: pair two people (signed up themselves or added by staff), optionally with when and where
+ * they first meet. With `notify`, each is told who their partner is and when they meet.
+ */
+export async function adminPairPodcast(db: Db, a: string, b: string, { meeting = null, notify: send = true }: { meeting?: podcast.Meeting | null; notify?: boolean } = {}) {
   const pairId = await podcast.makePair(db, a, b, "admin");
-  if (pairId) await notifyPodcastPaired(db, a, b);
+  if (!pairId) return null;
+  if (meeting) await podcast.setPairMeeting(db, pairId, meeting);
+  if (send) {
+    const [pa, pb] = await Promise.all([podcast.getParticipant(db, a), podcast.getParticipant(db, b)]);
+    if (pa && pb) {
+      for (const [me, other] of [
+        [pa, pb],
+        [pb, pa],
+      ] as const) {
+        const locale = localeOf(me.portal);
+        await notify(db, me, templates.podcastPairedByAdmin(locale, {
+          name: firstName(me.name),
+          partner: firstName(other.name),
+          when: meeting ? formatDateTime(meeting.date, meeting.time, locale) : null,
+          place: meeting?.place ?? null,
+          // students get their partner's contact; residents are contacted by the team
+          partnerContact: locale === "en" ? [other.email, formatPhone(other.phone)].filter(Boolean).join(", ") : undefined,
+        }));
+      }
+    }
+  }
   return pairId;
 }
 
@@ -282,53 +384,4 @@ async function notifyPodcastPaired(db: Db, aId: string, bId: string) {
       templates.podcastPaired(localeOf(me.portal), { name: firstName(me.name), partner: firstName(other.name), partnerContact: contact }),
     );
   }
-}
-
-// ---------------------------------------------------------------- lessons, lectures, callbacks
-
-export async function createLesson(db: Db, input: misc.LessonInput) {
-  const res = await misc.createLessonRequest(db, input);
-  if (input.portal === "resident") {
-    await notify(db, input, templates.residentReceived({ name: firstName(input.name), what: "שיעור פרטי", code: res.code }));
-  }
-  return res;
-}
-
-/** Matches a learner with a teacher and tells both, each with the topic in their own language. */
-export async function matchLessons(db: Db, learnerId: string, teacherId: string) {
-  const [all, topics] = await Promise.all([misc.listLessonRequests(db), misc.listLessonTopics(db, false)]);
-  const learner = all.find((r) => r.id === learnerId);
-  const teacher = all.find((r) => r.id === teacherId);
-  if (!learner || !teacher) return false;
-  // the learner's topics that the teacher offers, or all of the learner's topics
-  const shared = learner.topics.filter((t) => teacher.topics.includes(t));
-  const ids = shared.length ? shared : learner.topics;
-  const topicText = (locale: Locale) =>
-    [...ids.map((id) => topics.find((t) => t.id === id)?.[locale === "he" ? "name_he" : "name_en"]), learner.other_topic]
-      .filter(Boolean)
-      .join(", ");
-  if (!(await misc.matchLesson(db, learnerId, teacherId, topicText("en") || null))) return false;
-  await notify(db, learner, templates.lessonMatched(localeOf(learner.portal), {
-    name: firstName(learner.name),
-    other: firstName(teacher.name),
-    topic: topicText(localeOf(learner.portal)),
-    contact: "",
-  }));
-  await notify(db, teacher, templates.lessonMatched(localeOf(teacher.portal), {
-    name: firstName(teacher.name),
-    other: firstName(learner.name),
-    topic: topicText(localeOf(teacher.portal)),
-    contact: [learner.email, formatPhone(learner.phone)].filter(Boolean).join(", "),
-  }));
-  return true;
-}
-
-export async function createLecture(db: Db, input: misc.LectureInput) {
-  const res = await misc.createLectureProposal(db, input);
-  await notify(
-    db,
-    { name: input.name, phone: input.phone, email: input.email, portal: "resident" },
-    templates.residentReceived({ name: firstName(input.name), what: "הצעת הרצאה", code: res.code }),
-  );
-  return res;
 }

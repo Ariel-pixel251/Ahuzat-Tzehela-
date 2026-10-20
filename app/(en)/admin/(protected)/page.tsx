@@ -4,23 +4,26 @@ import { AdminSection, Stat, Table } from "@/components/admin";
 import { Badge, Notice, PageTitle } from "@/components/ui";
 import { eventSummaries, HEALTH_LABEL } from "@/lib/admin-data";
 import { daysFromToday, getCalendar } from "@/lib/calendar";
-import { getDb } from "@/lib/db/client";
-import { listAllDigitalRequests } from "@/lib/db/digital";
-import { listCallbacks, listMessages } from "@/lib/db/misc";
+import { adminPage } from "@/lib/admin-page";
+import { listCallbacks, listMessages, listProblemReports } from "@/lib/db/misc";
+import { listUpcomingSlots } from "@/lib/db/slots";
 import { listParticipants } from "@/lib/db/podcast";
 
 export const metadata: Metadata = { title: "Admin dashboard" };
 
 export default async function Dashboard() {
-  const db = await getDb();
+  const { db } = await adminPage();
   const calendar = await getCalendar();
-  const [events, digital, people, callbacks, messages] = await Promise.all([
+  const [events, slots, people, callbacks, messages, reports] = await Promise.all([
     eventSummaries(db, calendar),
-    listAllDigitalRequests(db),
+    listUpcomingSlots(db),
     listParticipants(db),
     listCallbacks(db),
     listMessages(db),
+    listProblemReports(db),
   ]);
+  const activeSlots = slots.filter((s) => s.status === "scheduled");
+  const needHelpers = activeSlots.filter((s) => s.helpers < s.helpers_needed && s.booked > 0);
   const problems = events.filter((e) => ["cancelled", "removed", "time-changed"].includes(e.health));
   // keep the dashboard short: one row per untagged series, tagged events of the next 60 days
   const untagged = calendar.upcoming
@@ -40,8 +43,10 @@ export default async function Dashboard() {
         </Notice>
       )}
       <div className="mb-10 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Open digital requests" value={digital.filter((d) => d.status === "open").length} />
-        <Stat label="Assigned digital requests" value={digital.filter((d) => d.status === "assigned").length} />
+        <Stat label="Upcoming digital support slots" value={activeSlots.length} tone={activeSlots.length ? "neutral" : "warn"} />
+        <Stat label="Residents booked into slots" value={activeSlots.reduce((n, s) => n + s.booked, 0)} />
+        <Stat label="Booked slots still needing helpers" value={needHelpers.length} tone={needHelpers.length ? "warn" : "neutral"} />
+        <Stat label="New problem reports" value={reports.filter((r) => r.status === "new").length} tone={reports.some((r) => r.status === "new") ? "warn" : "neutral"} />
         <Stat label="Podcast people without a pair" value={people.filter((p) => p.active && p.status !== "paired").length} />
         <Stat label="Open callback requests" value={callbacks.filter((c) => !c.handled).length} tone={callbacks.some((c) => !c.handled) ? "warn" : "neutral"} />
         <Stat label="Messages to send by hand" value={messages.filter((m) => m.status === "pending").length} tone={messages.some((m) => m.status === "pending") ? "warn" : "neutral"} />

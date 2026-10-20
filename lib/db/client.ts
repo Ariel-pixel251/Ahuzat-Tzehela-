@@ -36,7 +36,7 @@ async function connect(): Promise<Db> {
   const dir = process.env.PGLITE_DIR || ".data/pglite";
   await mkdir(dir, { recursive: true });
   const pg = new PGlite(dir);
-  await applyMigrations(pg, { seed: true });
+  await applyMigrations(pg);
   console.info(`[db] DATABASE_URL not set: using the local PGlite database in ${dir}`);
   return { query: async (text, params) => (await pg.query(text, params)).rows as never };
 }
