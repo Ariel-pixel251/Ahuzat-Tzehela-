@@ -5,7 +5,7 @@
 מקור התוכן: `notes/meeting-notes.md`. הדרישות המלאות וההחלטות: `notes/brief.md`.
 **מצב נוכחי (מה פרוס, מה נשאר): `notes/status.md` – לקרוא בתחילת כל עבודה ולעדכן בסופה.**
 
-האתר החי: https://ahuzattzehela.vercel.app (Vercel, אזור Frankfurt; מסד נתונים Supabase ב-Frankfurt).
+האתר החי: https://beyachad-ledorot.vercel.app (הכתובת הישנה ahuzattzehela.vercel.app מפנה אליה; Vercel, אזור Frankfurt; מסד נתונים Supabase ב-Frankfurt).
 בעל הפרויקט אינו מתכנת: להסביר צעדים ידניים (Vercel, Supabase, GitHub) בצורה פשוטה, צעד אחר צעד.
 
 ## שני פורטלים, קוד אחד

@@ -4,14 +4,14 @@ Where the project stands, so the next session (human or Claude) can pick up from
 Update this file whenever something is set up, changed or decided. **Never write passwords, keys or
 connection strings here**; they live only in Vercel and in `.env.local`.
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-20_
 
 ## Live
 
 | What | Where |
 | --- | --- |
-| Site | https://ahuzattzehela.vercel.app (Vercel project `ahuzat_tzehela`, Hobby plan) |
-| Admin | https://ahuzattzehela.vercel.app/admin (magic link to emails in `ADMIN_EMAILS`) |
+| Site | https://beyachad-ledorot.vercel.app (Vercel project `ahuzat_tzehela`, Hobby plan); the old `ahuzattzehela.vercel.app` should redirect here |
+| Admin | https://beyachad-ledorot.vercel.app/admin (magic link to emails in `ADMIN_EMAILS`) |
 | Code | GitHub `Ariel-pixel251/Ahuzat-Tzehela-`, branch `main`; Vercel deploys `main` automatically |
 | Database | Supabase project in **Central EU (Frankfurt)**, `eu-central-1` (the earlier Tokyo project was replaced) |
 | Server region | Vercel `fra1` (Frankfurt), set in `vercel.json`, next to the database |
@@ -25,7 +25,10 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - Supabase (Frankfurt): `supabase/migrations/0001_init.sql` and `supabase/seed.sql` run.
 - Vercel environment variables set: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ADMIN_EMAILS`, `CRON_SECRET`, `SITE_URL`.
-- Supabase Auth: Site URL and the redirect URL `https://ahuzattzehela.vercel.app/admin/auth/callback`.
+- Supabase Auth: Site URL and the redirect URL `https://beyachad-ledorot.vercel.app/admin/auth/callback` (keep the old
+  `https://ahuzattzehela.vercel.app/admin/auth/callback` until the new one is confirmed working).
+- Address changed to `https://beyachad-ledorot.vercel.app` (2026-10-20). Needs `SITE_URL` = that address in Vercel, the Supabase
+  Site URL/redirect above, and a redeploy. Use only this address on posters, QR codes and messages.
 - Resident time choice (PR #6): "from"/"until" scroll wheels (08:00–20:00, half hours) or "send me a
   message and we'll arrange a time". Stored in the existing `preferred_parts` column as `["10:00-12:00"]` or
   `["contact"]`; no database change.

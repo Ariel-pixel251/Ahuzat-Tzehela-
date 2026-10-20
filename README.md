@@ -71,7 +71,7 @@ With no environment values:
 Never commit `.env.local`; it is gitignored. Values are read forgivingly (surrounding spaces, line breaks and
 quotes are ignored), but settings changed in Vercel only apply after **Deployments → ⋯ → Redeploy**.
 
-**Something not working on the live site?** Open **`/admin/setup`** (e.g. `https://ahuzattzehela.vercel.app/admin/setup`).
+**Something not working on the live site?** Open **`/admin/setup`** (e.g. `https://beyachad-ledorot.vercel.app/admin/setup`).
 It checks the database, admin sign-in, admin emails, email, the daily job and the calendar for the deployment you're on,
 and says in plain words what to fix. It never shows secret values.
 
