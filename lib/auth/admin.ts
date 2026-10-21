@@ -2,6 +2,7 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { supabasePublicKey, supabaseUrl } from "@/lib/supabase-config";
 import { adminSessionFresh, isAdminEmail } from "./admin-rules";
 
@@ -35,8 +36,11 @@ export async function supabaseServer() {
   });
 }
 
-/** The signed-in admin, checked on the server for every admin page, export and action. */
-export async function getAdmin(): Promise<{ email: string } | null> {
+/**
+ * The signed-in admin, checked on the server for every admin page, export and action.
+ * Cached per request, so the layout and the page share one check with Supabase.
+ */
+export const getAdmin = cache(async (): Promise<{ email: string } | null> => {
   if (supabaseAuthConfigured()) {
     const { data } = await (await supabaseServer()).auth.getUser();
     const email = data.user?.email;
@@ -45,7 +49,7 @@ export async function getAdmin(): Promise<{ email: string } | null> {
   }
   if (devLoginAllowed() && (await cookies()).get(DEV_ADMIN_COOKIE)?.value === "1") return { email: "dev-admin@localhost" };
   return null;
-}
+});
 
 export async function requireAdmin() {
   const admin = await getAdmin();
