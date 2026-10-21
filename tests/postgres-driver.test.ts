@@ -6,7 +6,8 @@ import { audit, codeAttempt, deletePersonData, getSetting, hitRateLimit, listAud
 import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
 import { acceptConduct, addStudentByAdmin, saveProfile, upsertStudent } from "@/lib/db/students";
-import { postgresDb } from "@/lib/db/postgres";
+import { createServer } from "node:net";
+import { DbTimeoutError, postgresDb } from "@/lib/db/postgres";
 import type { Db } from "@/lib/db/types";
 import { applyMigrations } from "@/lib/db/migrate";
 
@@ -136,4 +137,17 @@ test("podcast topics, pairs and the status lookup", async () => {
 test("rate limit through the driver", async () => {
   expect(await hitRateLimit(db, "drv", 1, 60)).toBe(true);
   expect(await hitRateLimit(db, "drv", 1, 60)).toBe(false);
+});
+
+test("a database that never answers makes the query fail instead of hanging the page", async () => {
+  // accepts the connection and then says nothing, like a connection the pooler silently dropped
+  const silent = createServer(() => {});
+  await new Promise<void>((resolve) => silent.listen(55433, "127.0.0.1", resolve));
+  const stuck = postgresDb("postgres://postgres:postgres@127.0.0.1:55433/postgres", { max: 1, ssl: false, connect_timeout: 30 }, 300);
+  try {
+    await expect(stuck.db.query("select 1")).rejects.toBeInstanceOf(DbTimeoutError);
+  } finally {
+    void stuck.end().catch(() => {});
+    silent.close();
+  }
 });
