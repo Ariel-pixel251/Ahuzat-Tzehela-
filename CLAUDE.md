@@ -92,7 +92,7 @@ problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tas
 - **Admin pages:** start with `await adminPage("view-name")` (server check + audit of views of personal data);
   admin actions use `asAdmin` and call `misc.audit(...)`, never with a person's phone or email.
 - **JSON/array parameters:** pass `JSON.stringify(value)` as `$n::text::jsonb` (arrays through `text_array($n::text::jsonb)`),
-  never `$n::jsonb`: postgres.js (production) would encode the string twice. `tests/postgres-driver.test.ts` runs the
+  never `$n::jsonb` (a driver may encode the string twice). `tests/postgres-driver.test.ts` runs the
   production driver against a local server to catch this kind of difference; add a case there for new query shapes.
 
 ### Before opening a PR

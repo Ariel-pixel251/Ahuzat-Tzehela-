@@ -12,6 +12,20 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # a real Postgres for the driver test (tests/postgres-driver.test.ts): PGlite can't show every
+    # protocol problem that Supabase's pooler causes
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +38,8 @@ jobs:
       # SQL only with bind parameters; no dynamic SQL or SECURITY DEFINER in the migrations
       - run: node scripts/check-sql.mjs
       - run: npm test
+        env:
+          TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/postgres
       # the production build, then: no secrets in the files sent to browsers
       - run: npm run build
       - run: node scripts/check-client-bundle.mjs

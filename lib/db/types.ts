@@ -1,4 +1,4 @@
-/** Minimal database interface shared by postgres.js (Supabase) and PGlite (local/tests). */
+/** Minimal database interface shared by node-postgres (Supabase) and PGlite (local/tests). */
 export interface Db {
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
 }

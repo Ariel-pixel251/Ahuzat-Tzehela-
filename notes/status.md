@@ -44,6 +44,11 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - The first live form submission failed with "cannot extract elements from a scalar": the production driver
   (postgres.js) double-encoded JSON parameters bound as `$n::jsonb`. Fixed by binding them as `$n::text::jsonb`;
   `tests/postgres-driver.test.ts` now runs the production driver against a local server.
+- Admin pages hung on "Loading…" (and forms said "not available") because postgres.js sends a query with
+  values in two steps (describe + Flush, then execute), and Supabase's transaction pooler doesn't pass the
+  Flush on, so every query with values waited forever (queries without values, like the setup check's, worked).
+  Switched to node-postgres (`pg`), which sends each query in one go; the connection is now encrypted (TLS).
+  `tests/postgres-driver.test.ts` puts a stand-in pooler that drops Flush in front of a real Postgres in CI.
 
 - Admin sign-in links weren't sent and forms said "Sign-ups are not available" when the deployment couldn't
   reach the database (e.g. `DATABASE_URL` missing for that environment, or not redeployed). Admin sign-in no

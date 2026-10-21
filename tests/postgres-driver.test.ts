@@ -6,17 +6,23 @@ import { audit, codeAttempt, deletePersonData, getSetting, hitRateLimit, listAud
 import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
 import { acceptConduct, addStudentByAdmin, saveProfile, upsertStudent } from "@/lib/db/students";
-import { createServer } from "node:net";
+import { connect, createServer, type Server } from "node:net";
 import { DbTimeoutError, postgresDb } from "@/lib/db/postgres";
 import type { Db } from "@/lib/db/types";
 import { applyMigrations } from "@/lib/db/migrate";
 
-// The production driver (postgres.js, as used with Supabase) over the real Postgres wire protocol.
+// The production driver (node-postgres, as used with Supabase) over the real Postgres wire protocol.
 // The other database tests call PGlite directly, which binds parameters differently; this file
-// catches driver differences such as JSON parameters being encoded twice.
+// catches driver differences such as JSON parameters being encoded twice. The queries go through a
+// stand-in for Supabase's transaction pooler, which doesn't pass on "Flush" messages: a driver that
+// waits for an answer to one (postgres.js did) hangs like it did on the live site. PGlite answers
+// without waiting for a Flush, so that hang only shows against a real Postgres: CI runs one
+// (TEST_POSTGRES_URL) for the last test.
 
 const PORT = 55432;
+const POOLER_PORT = 55434;
 let server: PGLiteSocketServer;
+let pooler: Server;
 let pg: PGlite;
 let db: Db;
 let end: () => Promise<void>;
@@ -26,11 +32,43 @@ beforeAll(async () => {
   await applyMigrations(pg);
   server = new PGLiteSocketServer({ db: pg, port: PORT, host: "127.0.0.1" });
   await server.start();
-  ({ db, end } = postgresDb(`postgres://postgres:postgres@127.0.0.1:${PORT}/postgres`, { max: 1, ssl: false }));
+  pooler = await poolerStandIn(POOLER_PORT, PORT);
+  ({ db, end } = postgresDb(`postgres://postgres:postgres@127.0.0.1:${POOLER_PORT}/postgres`, { max: 1, ssl: false }));
 });
+
+/** Forwards the Postgres protocol both ways, but drops the client's Flush ("H") messages. */
+async function poolerStandIn(port: number, target: number, host = "127.0.0.1") {
+  const proxy = createServer((client) => {
+    const upstream = connect(target, host);
+    let buffer = Buffer.alloc(0);
+    let started = false;
+    client.on("data", (chunk: Buffer) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      for (;;) {
+        // the startup message has no type byte; every later message has one
+        const head = started ? 1 : 0;
+        if (buffer.length < head + 4) break;
+        const size = head + buffer.readInt32BE(head);
+        if (buffer.length < size) break;
+        const message = buffer.subarray(0, size);
+        buffer = buffer.subarray(size);
+        if (!started) started = true;
+        else if (message[0] === 0x48) continue; // "H": Flush
+        upstream.write(message);
+      }
+    });
+    upstream.pipe(client);
+    client.on("error", () => upstream.destroy());
+    upstream.on("error", () => client.destroy());
+    client.on("close", () => upstream.destroy());
+  });
+  await new Promise<void>((resolve) => proxy.listen(port, "127.0.0.1", resolve));
+  return proxy;
+}
 
 afterAll(async () => {
   await end?.();
+  pooler?.close();
   await server?.stop();
   await pg?.close();
 });
@@ -143,11 +181,33 @@ test("a database that never answers makes the query fail instead of hanging the 
   // accepts the connection and then says nothing, like a connection the pooler silently dropped
   const silent = createServer(() => {});
   await new Promise<void>((resolve) => silent.listen(55433, "127.0.0.1", resolve));
-  const stuck = postgresDb("postgres://postgres:postgres@127.0.0.1:55433/postgres", { max: 1, ssl: false, connect_timeout: 30 }, 300);
+  const stuck = postgresDb("postgres://postgres:postgres@127.0.0.1:55433/postgres", { max: 1, ssl: false, connectTimeoutMs: 30_000 }, 300);
   try {
     await expect(stuck.db.query("select 1")).rejects.toBeInstanceOf(DbTimeoutError);
   } finally {
     void stuck.end().catch(() => {});
     silent.close();
+  }
+});
+
+const realPostgres = process.env.TEST_POSTGRES_URL;
+
+test.skipIf(!realPostgres)("through the pooler stand-in, a real Postgres answers queries with values", async () => {
+  const target = new URL(realPostgres!);
+  const port = POOLER_PORT + 1;
+  const proxy = await poolerStandIn(port, Number(target.port || 5432), target.hostname);
+  target.hostname = "127.0.0.1";
+  target.port = String(port);
+  const real = postgresDb(target.toString(), { max: 2, ssl: false }, 3000);
+  try {
+    const rows = await Promise.all([
+      real.db.query<{ x: number; j: { a: number } }>("select $1::int as x, $2::text::jsonb as j", [2, JSON.stringify({ a: 1 })]),
+      real.db.query<{ y: string }>("select $1::text as y", ["two at once"]),
+    ]);
+    expect(rows[0][0]).toEqual({ x: 2, j: { a: 1 } });
+    expect(rows[1][0].y).toBe("two at once");
+  } finally {
+    await real.end();
+    proxy.close();
   }
 });

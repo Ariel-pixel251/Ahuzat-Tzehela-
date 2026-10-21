@@ -28,7 +28,7 @@ const noSqlInterpolation = {
         if (!["query", "exec", "unsafe"].includes(callee.property.name)) return;
         if (built(node.arguments[0])) context.report({ node: node.arguments[0], messageId: "interpolated" });
       },
-      // tagged templates (postgres.js sql`…`) are parameterised by the driver, but sql.unsafe isn't
+      // tagged templates (sql`…` in drivers that have them) are parameterised by the driver
       TaggedTemplateExpression() {},
     };
   },
