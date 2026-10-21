@@ -171,7 +171,8 @@ describe("injection and XSS payloads in every field", () => {
         for (const payload of PAYLOADS) {
           const fields = { ...form.valid(), [field]: Array.isArray(form.valid()[field]) ? [payload] : payload };
           const res = await form.action(null, fd(fields));
-          const shown = JSON.stringify(res ?? {});
+          // random private-link tokens can contain any letters (e.g. "pg_"): leave them out of the check
+          const shown = JSON.stringify(res ?? {}).replace(/token=[A-Za-z0-9_-]+/g, "token=…");
           expect(shown, `${form.name} / ${field}`).not.toMatch(LEAK);
           // nobody else's details come back
           expect(shown).not.toContain("0529998877");
