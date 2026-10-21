@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Announcements } from "@/components/Announcements";
 import { CallIcon } from "@/components/icons";
 import { BackHome } from "@/components/residents/BackHome";
 import { TextSizeToggle } from "@/components/TextSizeToggle";
@@ -7,9 +6,6 @@ import { buttonClass } from "@/components/ui";
 import { residentsText as t } from "@/lib/i18n";
 
 /** Resident portal frame: back home, bigger text, and "call me back" on every page. No menus. */
-// the announcement banner comes from the database: refresh static pages every 5 minutes
-export const revalidate = 300;
-
 export default function ResidentsLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -23,10 +19,26 @@ export default function ResidentsLayout({ children }: { children: React.ReactNod
           </Link>
         </div>
       </header>
-      <Announcements locale="he" label={t.announcement} />
       <main id="main" className="mx-auto max-w-3xl px-4 py-8">
         {children}
       </main>
+      <footer className="no-print mx-auto max-w-3xl border-t-2 border-line px-4 py-6">
+        <nav aria-label={t.footer.label}>
+          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-xl">
+            {[
+              { href: "/residents/status", label: t.footer.status },
+              { href: "/residents/report", label: t.footer.report },
+              { href: "/residents/privacy", label: t.footer.privacy },
+            ].map(({ href, label }) => (
+              <li key={href}>
+                <Link href={href} className="inline-flex min-h-14 items-center font-bold text-brand underline underline-offset-4">
+                  {label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </footer>
     </>
   );
 }

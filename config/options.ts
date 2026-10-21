@@ -1,4 +1,4 @@
-// Option lists for the podcast and digital-support forms. Edit freely;
+// Option lists for the podcast, digital-support and student forms. Edit freely;
 // `code` is what gets stored in the database.
 
 export type Option = { code: string; en: string; he: string };
@@ -21,9 +21,8 @@ export const DIGITAL_NEEDS = [
   { code: "phone", en: "Phone", he: "טלפון" },
   { code: "whatsapp", en: "WhatsApp", he: "וואטסאפ" },
   { code: "email", en: "Email", he: "אימייל" },
-  { code: "banking", en: "Online banking", he: "בנק באינטרנט" },
-  { code: "computer", en: "Computer", he: "מחשב" },
-  { code: "other", en: "Something else", he: "משהו אחר" },
+  { code: "banking", en: "Online banking", he: "בנקאות" },
+  { code: "other", en: "Something else", he: "אחר" },
 ] as const;
 
 export const PROJECTS = [
@@ -82,17 +81,11 @@ export function formatHours(codes: readonly string[], locale: "en" | "he"): stri
     .join(", ");
 }
 
-export const MEMORIAL_ROLES = {
-  resident: [
-    { code: "host", en: "Host in my living room", he: "לארח בסלון שלי" },
-    { code: "share", en: "Share a memory", he: "לספר זיכרון" },
-    { code: "attend", en: "Come and listen", he: "להגיע ולהקשיב" },
-  ],
-  student: [
-    { code: "attend", en: "Attend", he: "להגיע" },
-    { code: "help", en: "Help organise", he: "לעזור בארגון" },
-  ],
-} as const;
+/** Asked on the student profile; under 18 needs a parent or guardian's details and okay. */
+export const AGE_GROUPS = [
+  { code: "under-18", en: "Under 18", he: "מתחת לגיל 18" },
+  { code: "18-plus", en: "18 or older", he: "18 ומעלה" },
+] as const;
 
 export function optionLabel(list: readonly Option[], code: string, locale: "en" | "he") {
   return list.find((o) => o.code === code)?.[locale] ?? code;

@@ -22,16 +22,15 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 ## Done
 
 - Site built and merged (PR #1): student portal, resident portal, admin, calendar, tests, CI.
-- Supabase (Frankfurt): `supabase/migrations/0001_init.sql` and `supabase/seed.sql` run.
+- Supabase (Frankfurt): the old schema was run (before the October 2026 rewrite; see "Still to do").
 - Vercel environment variables set: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ADMIN_EMAILS`, `CRON_SECRET`, `SITE_URL`.
 - Supabase Auth: Site URL and the redirect URL `https://beyachad-ledorot.vercel.app/admin/auth/callback` (keep the old
   `https://ahuzattzehela.vercel.app/admin/auth/callback` until the new one is confirmed working).
 - Address changed to `https://beyachad-ledorot.vercel.app` (2026-10-20). Needs `SITE_URL` = that address in Vercel, the Supabase
   Site URL/redirect above, and a redeploy. Use only this address on posters, QR codes and messages.
-- Resident time choice (PR #6): "from"/"until" scroll wheels (08:00–20:00, half hours) or "send me a
-  message and we'll arrange a time". Stored in the existing `preferred_parts` column as `["10:00-12:00"]` or
-  `["contact"]`; no database change.
+- Time choice in the podcast wizard: "from"/"until" scroll wheels (08:00–20:00, half hours) or "send me a
+  message and we'll arrange a time".
 
 ## Lessons from the first deploy
 
@@ -52,22 +51,22 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - Supabase's built-in email only sends to members of the Supabase organisation, a few per hour: sign in to
   Supabase with the admin email, or set Resend as custom SMTP.
 
+## Scope change (October 2026, PR after #8)
+
+The site now has only events, podcast pairs and digital support **slots** (see `notes/brief.md`). The database
+schema was rewritten, so the live database must be reset once (no real data yet).
+
 ## Still to do
 
-- [ ] Run `supabase/migrations/0002_promote_waitlist.sql` in Supabase → SQL Editor (daily waiting-list promotion).
-- [ ] Open `/admin/setup` on the live site and fix anything red or yellow.
-- [ ] Protect residents' phone numbers: set `STUDENT_EMAIL_DOMAINS` (school email domain) in Vercel, or turn on
-      leader approval in `/admin` → Digital support.
-
-- [ ] Confirm the live checks: a "צרו איתי קשר" request appears in Supabase → `callback_requests`;
-      admin magic-link sign-in works; `/students/schedule` shows the live calendar (no yellow "offline" note).
-- [ ] Email (no domain needed): create a Gmail account for the project, turn on 2-Step Verification, create an
-      app password, add `SMTP_USER` and `SMTP_PASSWORD` in Vercel, redeploy, check `/admin/setup`. Use the same
-      Gmail as Supabase Auth's custom SMTP for admin sign-in emails. (Resend still works if a domain is available;
-      the school's em-is.org can't be used without its IT team.)
+- [ ] **Before merging the scope-change PR:** Supabase → SQL Editor → run `supabase/reset.sql` (deletes the old
+      tables), then run `supabase/migrations/0001_init.sql`. Then merge; `/admin/setup` should be all green.
+- [ ] Create the digital support slots in `/admin` → Digital support (weekly series + holiday dates).
+- [ ] Turn on two-factor login on GitHub, Vercel, Supabase (and Resend if used).
+- [ ] Fill in the organisation name and contact email in `legal/` and work through `LEGAL_TODO.md`; get the
+      school's okay before real users sign up.
 - [ ] Set `STUDENT_EMAIL_DOMAINS=em-is.org` in Vercel (only school emails can sign in as students).
-- [ ] Add the events from `notes/meeting-notes.md` to the Google Calendar, with tags (README → "How to add an event").
-      The seed file is only an offline fallback.
+- [ ] Email: `SMTP_USER` / `SMTP_PASSWORD` (Gmail app password) in Vercel and the same in Supabase's custom SMTP.
+- [ ] Keep the Google Calendar public; add the events from `notes/meeting-notes.md` with tags (README).
 - [ ] Add leaders to `ADMIN_EMAILS` and to `/admin/leaders`.
 - [ ] Try the resident portal with one or two real residents; screen-reader check.
 - [ ] Choose an SMS/WhatsApp provider (resident messages are a manual queue in `/admin/messages` for now).

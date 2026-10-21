@@ -6,13 +6,13 @@ import { Badge, Notice, PageTitle } from "@/components/ui";
 import { languageName } from "@/config/languages";
 import { eventSummaries, HEALTH_LABEL } from "@/lib/admin-data";
 import { getCalendar } from "@/lib/calendar";
-import { getDb } from "@/lib/db/client";
+import { adminPage } from "@/lib/admin-page";
 import { formatPhone } from "@/lib/phone";
 
 export const metadata: Metadata = { title: "Event registrations" };
 
 export default async function AdminEvents() {
-  const db = await getDb();
+  const { db } = await adminPage("event-registrations");
   const calendar = await getCalendar();
   const events = await eventSummaries(db, calendar);
   return (
@@ -69,7 +69,6 @@ export default async function AdminEvents() {
                   r.languages.map((l) => languageName(l, "en")).join(", "),
                   r.other_language,
                   r.preferred_language ? `prefers ${languageName(r.preferred_language, "en")}` : "",
-                  r.role,
                   r.notes,
                 ].filter(Boolean).join(" · "),
                 r.status,

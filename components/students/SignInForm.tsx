@@ -4,6 +4,7 @@ import { requestSignInLink } from "@/app/actions/students";
 import { ActionForm, TextField } from "@/components/forms";
 import { Notice } from "@/components/ui";
 import { studentsText as t } from "@/lib/i18n";
+import { Consent } from "./Consent";
 
 export function SignInForm() {
   return (
@@ -26,6 +27,7 @@ export function SignInForm() {
       <TextField name="name" label={t.form.name} autoComplete="name" required />
       <TextField name="email" label={t.form.email} type="email" autoComplete="email" required />
       <TextField name="phone" label={t.form.phoneOptional} hint={t.form.phoneHint} type="tel" autoComplete="tel" />
+      <Consent />
     </ActionForm>
   );
 }

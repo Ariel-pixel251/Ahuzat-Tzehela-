@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { headers } from "next/headers";
 import { deploymentEnv, readEnv } from "@/lib/env";
 import { getDb } from "@/lib/db/client";
@@ -7,7 +7,8 @@ import { hitRateLimit } from "@/lib/db/misc";
 import { DbNotConfiguredError, type Db } from "@/lib/db/types";
 import { shared, type Locale } from "@/lib/i18n";
 import type { ActionState } from "@/lib/form";
-import type { FieldErrors } from "@/lib/validation";
+import { logError } from "@/lib/log";
+import { isBot, type FieldErrors } from "@/lib/validation";
 
 export type { ActionState } from "@/lib/form";
 
@@ -25,11 +26,17 @@ export async function getBaseUrl() {
   return `${proto}://${host}`;
 }
 
-/** A hashed client identifier for rate limiting (never stored in clear). */
+/**
+ * A keyed hash of the client's address for rate limiting (never stored in clear, and not
+ * reversible without the server's secret). IPv6 addresses count per /64 network, since one
+ * device often controls a whole /64. On Vercel the platform sets these headers itself.
+ */
 export async function clientKey() {
   const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "unknown";
-  return createHash("sha256").update(ip).digest("hex").slice(0, 32);
+  let ip = h.get("x-real-ip")?.trim() || (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
+  if (ip.includes(":")) ip = ip.split(":").slice(0, 4).join(":") + "::/64";
+  const secret = readEnv("RATE_LIMIT_SECRET") || readEnv("CRON_SECRET") || "local-development";
+  return createHmac("sha256", secret).update(ip).digest("hex").slice(0, 32);
 }
 
 /** Rate limit per client: `max` submissions of `action` per `windowSeconds`. */
@@ -40,6 +47,30 @@ export async function allowed(db: Db, action: string, max = 10, windowSeconds = 
 export function localizeErrors(errors: FieldErrors, locale: Locale) {
   const text = shared(locale).errors;
   return Object.fromEntries(Object.entries(errors).map(([k, v]) => [k, text[v]]));
+}
+
+/** A failed validation as a form result; an error on the form as a whole becomes its message. */
+export function invalid(errors: FieldErrors, locale: Locale): ActionState {
+  const localized = localizeErrors(errors, locale);
+  return { ok: false, errors: localized, message: localized._ ?? undefined };
+}
+
+/**
+ * Honeypot and rate limit for a public form. Returns a state to stop with, or null to go on.
+ * Bots get a normal-looking answer and nothing is saved.
+ */
+export async function guardForm(
+  db: Db,
+  fd: FormData,
+  action: string,
+  locale: Locale,
+  { max = 10, windowSeconds = 600, perDay }: { max?: number; windowSeconds?: number; perDay?: number } = {},
+): Promise<ActionState> {
+  if (isBot(fd)) return { ok: true, code: locale === "he" ? "0000" : undefined };
+  if (!(await allowed(db, action, max, windowSeconds))) return { ok: false, message: shared(locale).errors.rateLimited };
+  // a daily cap too, so one address can't fill an event or the slots with made-up sign-ups
+  if (perDay && !(await allowed(db, `${action}:day`, perDay, 86_400))) return { ok: false, message: shared(locale).errors.rateLimited };
+  return null;
 }
 
 /** Runs an action with the database, turning failures into friendly messages. */
@@ -55,7 +86,7 @@ export async function withDb(locale: Locale, fn: (db: Db) => Promise<ActionState
     }
     // redirect() and notFound() work by throwing; let them through
     if (err && typeof err === "object" && "digest" in err) throw err;
-    console.error(err);
+    logError("action", err);
     return { ok: false, message: shared(locale).errors.generic };
   }
 }

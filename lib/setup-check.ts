@@ -17,7 +17,7 @@ let cached: { at: number; checks: Promise<Check[]> } | undefined;
 
 /**
  * What works and what's missing on this deployment. Never includes secret values. Results are
- * reused for 30 seconds, since the page is public.
+ * reused for 30 seconds.
  */
 export function setupChecks(): Promise<Check[]> {
   if (!cached || Date.now() - cached.at > 30_000) cached = { at: Date.now(), checks: runChecks() };
@@ -50,49 +50,54 @@ async function checkDatabase(): Promise<Check[]> {
       },
     ];
   }
-  let topics: number;
-  let m0002: boolean;
+  let row: { functions: boolean; schema: boolean; old: boolean; slots: number };
   try {
     const db = await getDb();
-    // one query proves the connection, the tables (lesson_topics) and the functions (hit_rate_limit)
-    const [row] = await db.query<{ topics: number; functions: boolean; m0002: boolean }>(
-      `select (select count(*)::int from lesson_topics) as topics,
-              to_regproc('public.hit_rate_limit') is not null as functions,
-              to_regproc('public.promote_waitlist') is not null as m0002`,
+    // one query proves the connection, the tables (digital_slots), the functions (hit_rate_limit),
+    // and whether tables from before the 2026 rewrite are still there
+    [row] = await db.query<{ functions: boolean; schema: boolean; old: boolean; slots: number }>(
+      `select to_regproc('public.hit_rate_limit') is not null as functions,
+              to_regclass('public.digital_slots') is not null as schema,
+              to_regclass('public.lesson_topics') is not null or to_regclass('public.digital_requests') is not null as old,
+              case when to_regclass('public.digital_slots') is null then 0
+                   else (select count(*)::int from digital_slot_overview where ends_at > now() and status = 'scheduled') end as slots`,
     );
-    if (!row.functions) {
-      return dbProblem({ code: "42883" });
-    }
-    topics = row.topics;
-    m0002 = row.m0002;
   } catch (err) {
     return dbProblem(err);
   }
-  const approval = Boolean(await getSetting(await getDb(), "require_match_approval", false).catch(() => false));
+  if (row.old || !row.schema) {
+    return [
+      {
+        name: "Database tables",
+        status: "bad",
+        detail: row.old
+          ? "The database still has the old tables (lessons, open digital-support requests…). The site now needs the new schema."
+          : "Connected, but the site's tables aren't there.",
+        fix: row.old
+          ? "In Supabase → SQL Editor, run supabase/reset.sql once (it deletes the old tables and their data), then run supabase/migrations/0001_init.sql."
+          : "In Supabase → SQL Editor, run supabase/migrations/0001_init.sql.",
+      },
+    ];
+  }
+  if (!row.functions) return dbProblem({ code: "42883" });
+  const approval = Boolean(await getSetting(await getDb(), "require_helper_approval", false).catch(() => false));
   return [
-    m0002
-      ? { name: "Database", status: "ok", detail: "Connected, and the tables are set up." }
-      : {
-          name: "Database update",
-          status: "warn",
-          detail: "Connected, but the latest database update hasn't been run (waiting lists won't move up automatically).",
-          fix: "In Supabase → SQL Editor, run supabase/migrations/0002_promote_waitlist.sql once.",
-        },
+    { name: "Database", status: "ok", detail: "Connected, and the tables are set up." },
     studentEmailDomains().length || approval
       ? { name: "Residents' phone numbers", status: "ok", detail: "Protected by school-email sign-in or leader approval." }
       : {
           name: "Residents' phone numbers",
           status: "warn",
-          detail: "Anyone with any email can sign in as a student, take a digital-support request and see the resident's phone number.",
-          fix: "Add STUDENT_EMAIL_DOMAINS in Vercel (the school's email domain, e.g. emis.org.il) and redeploy, or turn on leader approval in /admin → Digital support.",
+          detail: "Anyone with any email can sign in as a student, volunteer for a slot and (48 hours before it) see the residents' phone numbers.",
+          fix: "Add STUDENT_EMAIL_DOMAINS in Vercel (the school's email domain, e.g. em-is.org) and redeploy, or turn on helper approval in /admin → Digital support.",
         },
-    topics > 0
-      ? { name: "Starter data", status: "ok", detail: "Lesson topics are set up." }
+    row.slots > 0
+      ? { name: "Digital support slots", status: "ok", detail: `${row.slots} upcoming slots.` }
       : {
-          name: "Starter data",
+          name: "Digital support slots",
           status: "warn",
-          detail: "No lesson topics yet.",
-          fix: "In Supabase → SQL Editor, run supabase/seed.sql (or add topics in /admin → Lessons).",
+          detail: "No upcoming digital support slots, so residents can't book help.",
+          fix: "Create slots in /admin → Digital support (one-off or weekly).",
         },
   ];
 }

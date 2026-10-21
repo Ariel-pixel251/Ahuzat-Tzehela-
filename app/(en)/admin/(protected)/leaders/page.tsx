@@ -5,7 +5,7 @@ import { AdminSection, CsvLink, Table } from "@/components/admin";
 import { ActionForm, SelectField, TextField } from "@/components/forms";
 import { Badge, PageTitle } from "@/components/ui";
 import { optionLabel, PROJECTS } from "@/config/options";
-import { getDb } from "@/lib/db/client";
+import { adminPage } from "@/lib/admin-page";
 import { listLeaders, listTasks } from "@/lib/db/leaders";
 import { formatPhone } from "@/lib/phone";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Leaders and tasks" };
 const projects = PROJECTS.map((p) => ({ value: p.code, label: p.en }));
 
 export default async function AdminLeaders() {
-  const db = await getDb();
+  const { db } = await adminPage("leaders");
   const [leaders, tasks] = await Promise.all([listLeaders(db), listTasks(db)]);
   return (
     <>

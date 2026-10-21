@@ -1,5 +1,6 @@
 import { queueMessage } from "@/lib/db/misc";
 import { readEnv } from "@/lib/env";
+import { logError } from "@/lib/log";
 import { smtpSettings } from "./smtp";
 import type { Db } from "@/lib/db/types";
 
@@ -41,30 +42,39 @@ export async function smtpTransport(): Promise<Transport | null> {
   return transport.transport;
 }
 
-/** Sends an email. Without an email service it's logged instead (local development). */
+/** An email header value: never a line break (no header injection). */
+const headerSafe = (v: string) => v.replace(/[\r\n]+/g, " ").trim();
+
+/** Sends an email. Without an email service it's logged instead (local development only). */
 export async function sendEmail(to: string, msg: Message): Promise<"sent" | "logged" | "failed"> {
+  const recipient = headerSafe(to);
+  const subject = headerSafe(msg.subject);
   const provider = emailProvider();
   if (!provider) {
-    console.info(`[email] (not sent: no email service set up)\nTo: ${to}\nSubject: ${msg.subject}\n\n${msg.body}\n`);
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[email] (not sent: no email service set up)\nTo: ${recipient}\nSubject: ${subject}\n\n${msg.body}\n`);
+    } else {
+      console.warn("[email] not sent: no email service is set up (see /admin/setup)");
+    }
     return "logged";
   }
   try {
     if (provider === "smtp") {
-      await (await smtpTransport())!.sendMail({ from: smtpSettings()!.from, to, subject: msg.subject, text: msg.body });
+      await (await smtpTransport())!.sendMail({ from: headerSafe(smtpSettings()!.from), to: recipient, subject, text: msg.body });
       return "sent";
     }
     const key = readEnv("RESEND_API_KEY")!;
-    const from = readEnv("EMAIL_FROM")!;
+    const from = headerSafe(readEnv("EMAIL_FROM")!);
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, subject: msg.subject, text: msg.body }),
+      body: JSON.stringify({ from, to: recipient, subject, text: msg.body }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) throw new Error(`Resend HTTP ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`Resend HTTP ${res.status}`);
     return "sent";
   } catch (err) {
-    console.error("[email] failed:", err);
+    logError("email", err);
     return "failed";
   }
 }

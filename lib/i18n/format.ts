@@ -55,3 +55,16 @@ export function dateBadge(date: string, locale: Locale) {
   const d = asDate(date);
   return { day: String(d.getUTCDate()), weekday: weekday[locale].format(d), short: shortDay[locale].format(d) };
 }
+
+/** "יום שלישי, 3 בנובמבר, 16:00 עד 17:30" / "Tuesday 3 November, 16:00–17:30" */
+export function formatSlotWhen(s: { slot_date: string; start_time: string; end_time: string }, locale: Locale) {
+  return locale === "he"
+    ? `${formatDay(s.slot_date, "he")}, ${s.start_time} עד ${s.end_time}`
+    : `${formatDay(s.slot_date, "en")}, ${s.start_time}–${s.end_time}`;
+}
+
+/** The slot's time and place in one line, e.g. "יום שלישי, 3 בנובמבר, 16:00 עד 17:30, בחדר הקהילה". */
+export function formatSlot(s: { slot_date: string; start_time: string; end_time: string; place_he: string; place_en: string | null }, locale: Locale) {
+  const place = locale === "he" ? s.place_he : (s.place_en ?? s.place_he);
+  return `${formatSlotWhen(s, locale)}, ${place}`;
+}

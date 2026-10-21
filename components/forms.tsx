@@ -248,7 +248,7 @@ export function MultiSelect({
   );
 }
 
-export function Checkbox({ name, label, required }: { name: string; label: ReactNode; required?: boolean }) {
+export function Checkbox({ name, label, required, defaultChecked }: { name: string; label: ReactNode; required?: boolean; defaultChecked?: boolean }) {
   const id = useId() + name;
   const error = useFieldError(name);
   return (
@@ -259,6 +259,7 @@ export function Checkbox({ name, label, required }: { name: string; label: React
           type="checkbox"
           name={name}
           required={required}
+          defaultChecked={defaultChecked}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
           className="mt-1 size-6 shrink-0"

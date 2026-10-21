@@ -4,18 +4,25 @@ import { expect, test } from "@playwright/test";
 const residentPages = [
   "/residents",
   "/residents/events",
-  "/residents/register",
   "/residents/help",
   "/residents/podcast",
-  "/residents/lecture",
   "/residents/callback",
-  "/residents/lessons",
   "/residents/status",
-  "/residents/courses",
+  "/residents/report",
   "/residents/privacy",
 ];
 
-const studentPages = ["/", "/students", "/students/schedule", "/students/podcast", "/students/digital", "/students/sign-in", "/students/visit", "/admin/login", "/admin/setup"];
+const studentPages = [
+  "/",
+  "/students",
+  "/students/events",
+  "/students/podcast",
+  "/students/digital-support",
+  "/students/sign-in",
+  "/students/report",
+  "/students/privacy",
+  "/admin/login",
+];
 
 // Resident portal: WCAG 2.1 AA plus AAA contrast.
 for (const path of residentPages) {
@@ -34,19 +41,10 @@ for (const path of studentPages) {
   });
 }
 
-test("a wizard step passes axe too", async ({ page }) => {
-  await page.goto("/residents/help");
-  await page.getByRole("button", { name: "וואטסאפ" }).click();
-  await page.getByRole("button", { name: "הבא", exact: true }).click();
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag2aaa"]).analyze();
-  expect(results.violations.map((v) => v.id)).toEqual([]);
-});
-
-test("the time wheels pass axe", async ({ page }) => {
-  await page.goto("/residents/help");
-  await page.getByRole("button", { name: "וואטסאפ" }).click();
-  await page.getByRole("button", { name: "הבא", exact: true }).click();
-  await page.getByRole("button", { name: "הבא", exact: true }).click();
+test("the time wheels (podcast) pass axe", async ({ page }) => {
+  await page.goto("/residents/podcast");
+  await page.getByRole("button", { name: "סיפורי חיים" }).click();
+  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "הבא", exact: true }).click();
   await expect(page.getByRole("spinbutton", { name: "משעה" })).toBeVisible();
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag2aaa"]).analyze();
   expect(results.violations.map((v) => v.id)).toEqual([]);

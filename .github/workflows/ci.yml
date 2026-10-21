@@ -5,10 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,9 +21,14 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      # SQL only with bind parameters; no dynamic SQL or SECURITY DEFINER in the migrations
+      - run: node scripts/check-sql.mjs
       - run: npm test
+      # the production build, then: no secrets in the files sent to browsers
+      - run: npm run build
+      - run: node scripts/check-client-bundle.mjs
       - run: npx playwright install --with-deps chromium
-      # resident flows, accessibility (axe) and layout checks, against a local database and a fixture calendar
+      # resident, student and admin flows, accessibility (axe), security headers, against a local database and a fixture calendar
       - run: npx playwright test
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -28,3 +36,28 @@ jobs:
           name: playwright-results
           path: test-results
           retention-days: 7
+
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # any high or critical problem in what runs in production fails the build
+      - run: npm audit --omit=dev --audit-level=high
+      # development tools: reported, not blocking (see SECURITY.md)
+      - run: npm audit --audit-level=high || echo "::warning::npm audit found issues in development-only packages (see the log above)"
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the whole git history, not just the last commit
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,52 +1,55 @@
 # Project brief and decisions
 
-The final brief (it replaces earlier instructions) and how it was implemented. The source notes are
-in `meeting-notes.md`.
+The current brief (the October 2026 "scope change + security fix", which overrides the earlier master brief
+where they conflict) and how it was implemented. The source notes are in `meeting-notes.md`.
 
 ## The brief, in short
 
-- **Two portals, one codebase.** `/students` for EMIS students (English, LTR) and `/residents` for residents
-  (Hebrew, RTL, as simple as possible for elderly people). `/` has two big buttons. `/admin` for the team.
-- **Events come only from Google Calendar** (public iCal feed). Bilingual titles `English | עברית`,
-  descriptions split by `---`, tags such as `[game-night]` choose the registration form, options
-  `[capacity: N]`, `[closes: date]`, `[languages]`. Registrations are linked by iCal UID (plus occurrence
-  date for recurring events) and keep a snapshot of the event.
-- **Features:** event registration (capacity, waiting list, deadline), language night, game night, podcast
-  pairs, digital support (resident request → student takes it), private lessons, lecture proposals, visit
-  requests, memory in the living room, courses and timetable, announcements, share and invite, call-me-back.
-- **Admin:** Supabase Auth magic link with an allowlist, CSV exports, register-on-behalf, printable sign-up
-  sheet, leaders and tasks, dashboard.
-- **Notifications:** Resend email, a manual SMS/WhatsApp queue for residents, reminders the day before.
-- **Privacy:** contact details never public; RLS; data deleted 90 days after the event.
+- **Only three features:** events from Google Calendar (registration, language night, game night),
+  podcast pairs, and digital support as **admin-set time slots**.
+- **Kept around them:** the two portals (students English LTR; residents Hebrew RTL, very simple), the admin
+  area, leaders and tasks, register-a-resident-on-their-behalf, "call me back", email notifications,
+  "report a problem".
+- **Removed:** visit requests, courses and the school timetable page, private lessons, share/invite page and
+  QR poster, lecture proposals, "memory in the living room", the announcements banner, the paper sign-up sheet.
+- **Branding:** "EMIS × אחוזת צהלה" / "EMIS × Ahuzat Tzahala" as the main heading (in `config/brand.ts`), with the
+  subtitle "פודקאסט, ליווי דיגיטלי ואירועים - ביחד" / "Podcast, digital support and events, together".
+  No generic greeting.
+- **Digital support slots:** admins create, edit, cancel, repeat weekly and block dates; residents book in a
+  wizard (time → need → name and phone → review); students volunteer; no overbooking; contact details only for
+  the student's own slots, after the code of conduct and within 48 hours; confirmations, reminders, change notices.
+- **Security and privacy hardening:** parameterised SQL only (with a lint rule), strict server-side validation,
+  injection and role tests, RLS deny-by-default, CSP and security headers, CSRF, rate limits, code lockout,
+  admin checks everywhere with an audit log, safe errors and logs, email header safety, Dependabot/npm audit/
+  gitleaks, retention, "delete all data for a person", draft privacy notices, code of conduct, report a problem,
+  blocking, guardian details for under-18 volunteers.
 
 ## Decisions
 
-- No passwords for registrations. Students: name + email (a magic link to sign in for digital support and
-  a private link for the podcast page). Residents: name + phone, email optional, a 4-digit request code.
-  Only admins have a real login.
-- Resident portal Hebrew-only; student portal English-only; admin English-only.
-- "TBC" in the notes shows as "Details coming soon" / "פרטים בקרוב".
-- Registrations are deleted 90 days after the event; cancelled requests are deleted by the daily job.
-- SMS/WhatsApp is a queue in the admin area ("messages to send by hand") until a provider is chosen.
-- The server reaches the database through a direct, server-only Postgres connection (`DATABASE_URL`) rather
-  than the service-role REST key. Same privilege model; it lets the claiming, pairing and waiting-list rules
-  live in atomic SQL functions that the tests run for real, and lets the site run locally without any setup.
-- RLS is stricter than "public can only insert": the public API roles can't do anything, and every insert
-  goes through validated, rate-limited server code.
-- The status page needs the phone **and** the code, never the code alone, and is rate-limited.
-- Residents pair for the podcast through the team (students request, the team confirms by phone).
-  Students use a private page to request and accept pairs.
-- Private lessons: residents say what they want to learn, students what they can teach; admins match them.
-- The resident home page has exactly the six buttons from the brief; lessons, courses, request status and
-  privacy are small text links under them.
-- Seed events (offline fallback only): 1 Nov 17:30 board games night; 16 Nov 18:30 language night;
-  10 Dec Hanukkah party; 14–15 Dec Yocopas visit (TBC); 15 Dec lecture "To the Abyss and Back" (working
-  title, TBC, possibly with dp2 students); 27 Jan International Holocaust Remembrance Day (memory in the
-  living room; Leah's English lecture, topic TBC).
+- Digital support is slot-based only; the old open request list (residents ask, students take) is removed.
+- Resident lectures, the memory sign-up, announcements and paper sign-up sheets were removed as outside the
+  three kept features.
+- "Call me back" stays, as part of helping residents, but only as a name and phone request.
+- Phone is the main contact for residents; email is optional.
+- The schema was rewritten as one clean `0001_init.sql` (no real data yet); `supabase/reset.sql` removes the old
+  tables once.
+- The server reaches the database through `DATABASE_URL` (server-only), not a service-role REST key; RLS is
+  stricter than "public can only insert": the public API roles can't do anything.
+- The page that explains setup problems (`/admin/setup`) needs an admin, except while admin sign-in itself isn't
+  configured (it's how the owner fixes that).
+- Admin sessions last 12 hours; student sessions 30 days.
+- The 4-digit code: the phone number is the second factor; 5 wrong codes lock that phone for 24 hours.
+- Retention: event registrations 90 days after the event, slots and bookings 90 days after the slot, cancelled
+  sign-ups and call-backs 30 days, problem reports 1 year, audit log 2 years.
+- Students who volunteer give an age group; under-18s also a parent or guardian's name, phone and okay.
+- Admins can make podcast pairs and add slot helpers with people who never signed up (typed in by staff), and
+  can send them a "who and when" message (owner's request).
+- The podcast wizard keeps the hour scroll wheels (owner's request, an exception to "big buttons only").
+- Seed events (offline fallback only) come from the meeting notes; they never open registration.
 
 ## Still open
 
 - Who are Yocopas and dp2? Who is the 15 December speaker, and what is the lecture's title?
 - The topic of Leah's lecture.
 - Which SMS/WhatsApp provider to use.
-- Add the seed events to the Google Calendar (the feed is the only source when it works).
+- The organisation name and contact email for the privacy notices (`LEGAL_TODO.md`).

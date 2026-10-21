@@ -1,50 +1,28 @@
 import type { Metadata } from "next";
 import { registerResidentForEvent } from "@/app/actions/residents";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { EventCard } from "@/components/residents/EventCard";
-import { buttonClass, Notice } from "@/components/ui";
+import { Notice } from "@/components/ui";
 import { Wizard } from "@/components/Wizard";
 import { eventForm, getEvent, registrationOpen } from "@/lib/calendar";
-import { upcomingWithCounts } from "@/lib/event-data";
 import { formatEventWhen } from "@/lib/i18n/format";
 import { residentsText as t, sharedText } from "@/lib/i18n";
+import { v } from "@/lib/validation";
 import { eventSteps } from "@/lib/wizard-steps";
 
 export const metadata: Metadata = { title: t.pages.register.title };
 
-/** Without ?event: the events open for registration. With ?event: the registration wizard. */
-export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ event?: string; more?: string }> }) {
-  const { event: key, more } = await searchParams;
+/** The registration wizard for one event (?event=key). */
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ event?: string | string[] }> }) {
+  const { event: key } = await searchParams;
 
-  if (!key) {
-    const { events, counts } = await upcomingWithCounts((e) => eventForm(e) !== null);
-    const shown = events.slice(0, more ? 30 : 5);
-    return (
-      <>
-        <h1 className="mb-6 text-4xl font-extrabold">{t.events.registerTitle}</h1>
-        {shown.length === 0 ? (
-          <p className="text-2xl">{t.events.noneToRegister}</p>
-        ) : (
-          <ul className="space-y-6">
-            {shown.map((e) => (
-              <EventCard key={e.key} event={e} confirmed={counts.get(e.key)} />
-            ))}
-          </ul>
-        )}
-        {!more && events.length > shown.length && (
-          <Link href="/residents/register?more=1" className={`${buttonClass.secondary} mt-8 w-full min-h-[72px] text-2xl`}>
-            {t.events.more}
-          </Link>
-        )}
-      </>
-    );
-  }
+  // the list of events lives on the events page; this page is the wizard for one event
+  if (!key) redirect("/residents/events");
+  const parsed = v.eventKey.safeParse(key);
+  if (!parsed.success) return <Notice kind="bad">{sharedText.he.errors.notFound}</Notice>;
 
-  const event = await getEvent(key);
+  const event = await getEvent(parsed.data);
   const form = event ? eventForm(event) : null;
   if (form === "podcast") redirect("/residents/podcast");
-  if (form === "digital-support") redirect("/residents/help");
   if (!event || !form) return <Notice kind="bad">{sharedText.he.errors.notFound}</Notice>;
   if (!registrationOpen(event)) return <Notice kind="warn">{sharedText.he.errors.closed}</Notice>;
 

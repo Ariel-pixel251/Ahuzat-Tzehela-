@@ -7,7 +7,7 @@ import { dateBadge, formatEventWhen, formatMonth } from "@/lib/i18n/format";
 
 /** Upcoming events grouped by month, with the registration button each event's tag calls for. */
 export function Agenda({ events, counts }: { events: CalendarEvent[]; counts: Map<string, number> }) {
-  if (!events.length) return <p>{t.schedule.none}</p>;
+  if (!events.length) return <p>{t.events.none}</p>;
   return (
     <div className="space-y-10">
       {groupByMonth(events).map((group) => (
@@ -29,7 +29,7 @@ export function Agenda({ events, counts }: { events: CalendarEvent[]; counts: Ma
 export function AgendaItem({ event, confirmed }: { event: CalendarEvent; confirmed?: number }) {
   const badge = dateBadge(event.date, "en");
   const action = eventAction(event, "students", confirmed);
-  const labels = { register: t.schedule.register, podcast: t.schedule.joinPodcast, digital: t.schedule.digital };
+  const labels = { register: t.events.register, podcast: t.events.joinPodcast };
   const placesLeft = event.capacity !== undefined ? Math.max(event.capacity - (confirmed ?? 0), 0) : null;
   return (
     <li className="flex gap-4 rounded-2xl border-2 border-line bg-white p-4">
@@ -45,10 +45,10 @@ export function AgendaItem({ event, confirmed }: { event: CalendarEvent; confirm
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {event.tbc && <Badge tone="warn">{sharedText.en.tbc}</Badge>}
           {action?.kind === "link" && action.label === "register" && placesLeft !== null && (
-            <Badge tone={action.full ? "bad" : "neutral"}>{action.full ? t.schedule.full : t.schedule.placesLeft(placesLeft)}</Badge>
+            <Badge tone={action.full ? "bad" : "neutral"}>{action.full ? t.events.full : t.events.placesLeft(placesLeft)}</Badge>
           )}
-          {event.closes && action?.kind === "link" && <Badge>{t.schedule.closes(dateBadge(event.closes, "en").short)}</Badge>}
-          {action?.kind === "closed" && <Badge>{t.schedule.closed}</Badge>}
+          {event.closes && action?.kind === "link" && <Badge>{t.events.closes(dateBadge(event.closes, "en").short)}</Badge>}
+          {action?.kind === "closed" && <Badge>{t.events.closed}</Badge>}
         </div>
         {action?.kind === "link" && (
           <Link href={action.href} className={`${buttonClass.primary} mt-3`}>

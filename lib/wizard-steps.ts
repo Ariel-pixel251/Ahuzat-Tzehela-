@@ -1,8 +1,10 @@
 import { LANGUAGES } from "@/config/languages";
-import { DAYS, DIGITAL_NEEDS, MEMORIAL_ROLES, PODCAST_TOPICS } from "@/config/options";
+import { DAYS, DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
 import type { WizardStep } from "@/components/Wizard";
 import { eventForm, type CalendarEvent } from "@/lib/calendar/parse";
+import { freePlaces, type Slot } from "@/lib/db/slots";
 import { residentsText, sharedText } from "@/lib/i18n";
+import { formatSlot } from "@/lib/i18n/format";
 
 // The questions of each resident wizard, in order. One question per screen.
 
@@ -84,27 +86,36 @@ export function eventSteps(event: CalendarEvent): WizardStep[] {
       ],
     });
   }
-  if (form === "memorial") {
-    steps.push({ id: "role", title: f.memorialRole, fields: [{ kind: "choice", name: "role", options: opts(MEMORIAL_ROLES.resident) }] });
-  }
   steps.push(contactStep());
   return steps;
 }
 
-export const helpSteps: WizardStep[] = [
-  {
-    id: "needs",
-    title: f.needs,
-    hint: f.needsHint,
-    fields: [
-      { kind: "multi", name: "needs", options: opts(DIGITAL_NEEDS) },
-      { kind: "text", name: "needs_other", label: f.needsOther, optional: true },
-    ],
-  },
-  ...whenSteps,
-  languageStep(f.language),
-  contactStep(),
-];
+/** The open slots as big buttons: time and place, with places left; full ones can't be chosen. */
+export function slotOptions(slots: Slot[], now = new Date()) {
+  return slots
+    .filter((s) => s.status === "scheduled" && s.booking_open && s.closes_at > now)
+    .map((s) => {
+      const free = freePlaces(s);
+      return { value: s.id, label: formatSlot(s, "he"), detail: free ? f.placesLeft(free) : f.slotFull, disabled: free === 0 };
+    });
+}
+
+/** Book digital support: a time, what help is needed, then name and phone. */
+export function helpSteps(slots: Slot[]): WizardStep[] {
+  return [
+    { id: "slot", title: f.slot, hint: f.slotHint, fields: [{ kind: "choice", name: "slot", options: slotOptions(slots) }] },
+    {
+      id: "needs",
+      title: f.needs,
+      hint: f.needsHint,
+      fields: [
+        { kind: "multi", name: "needs", options: opts(DIGITAL_NEEDS), columns: 2 },
+        { kind: "text", name: "needs_other", label: f.needsOther, optional: true },
+      ],
+    },
+    contactStep(),
+  ];
+}
 
 export const podcastSteps: WizardStep[] = [
   { id: "topics", title: f.topics, hint: f.topicsHint, fields: [{ kind: "multi", name: "topics", options: opts(PODCAST_TOPICS) }] },
@@ -113,34 +124,17 @@ export const podcastSteps: WizardStep[] = [
   contactStep(),
 ];
 
-export const lectureSteps: WizardStep[] = [
-  { id: "topic", title: f.lectureTopic, fields: [{ kind: "text", name: "topic", label: f.lectureTopic, multiline: true }] },
-  languageStep(f.lectureLanguage),
-  {
-    id: "date",
-    title: f.lectureDate,
-    fields: [{ kind: "text", name: "preferred_date", label: f.lectureDate, hint: f.lectureDateHint, optional: true }],
-  },
-  {
-    id: "description",
-    title: f.lectureDescription,
-    fields: [{ kind: "text", name: "description", label: f.lectureDescription, multiline: true, optional: true }],
-  },
-  contactStep(),
-];
-
 export const callbackSteps: WizardStep[] = [contactStep({ email: false })];
 
-export function lessonSteps(topics: { id: string; name_he: string }[]): WizardStep[] {
-  return [
-    {
-      id: "topics",
-      title: f.lessonTopics,
-      fields: [
-        { kind: "multi", name: "topics", options: topics.map((t) => ({ value: t.id, label: t.name_he })), optional: true },
-        { kind: "text", name: "other_topic", label: f.lessonOther, optional: true },
-      ],
-    },
-    contactStep(),
-  ];
-}
+export const reportSteps: WizardStep[] = [
+  { id: "message", title: f.reportMessage, fields: [{ kind: "text", name: "message", label: f.reportMessageLabel, multiline: true }] },
+  {
+    id: "contact",
+    title: f.reportContactTitle,
+    reviewLabel: f.reportContactTitle,
+    fields: [
+      { kind: "text", name: "name", label: f.nameLabel, optional: true, autoComplete: "name" },
+      { kind: "text", name: "phone", label: f.phoneLabel, type: "tel", check: "phone", optional: true, autoComplete: "tel" },
+    ],
+  },
+];

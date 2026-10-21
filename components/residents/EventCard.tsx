@@ -9,7 +9,7 @@ import { formatEventWhen } from "@/lib/i18n/format";
 export function EventCard({ event, confirmed }: { event: CalendarEvent; confirmed?: number }) {
   const action = eventAction(event, "residents", confirmed);
   const sentence = event.description?.he.split("\n")[0];
-  const labels = { register: t.events.iWantToCome, podcast: t.events.joinPodcast, digital: t.events.askForHelp };
+  const labels = { register: t.events.iWantToCome, podcast: t.events.joinPodcast };
   return (
     <li className="rounded-2xl border-4 border-ink bg-white p-5">
       <h2 className="text-3xl font-extrabold leading-snug">{event.title.he}</h2>

@@ -3,7 +3,7 @@ import { markMessageSent } from "@/app/actions/admin";
 import { ActionButton } from "@/components/ActionButton";
 import { AdminSection, CsvLink, Table } from "@/components/admin";
 import { Notice, PageTitle } from "@/components/ui";
-import { getDb } from "@/lib/db/client";
+import { adminPage } from "@/lib/admin-page";
 import { listMessages } from "@/lib/db/misc";
 import { formatPhone } from "@/lib/phone";
 
@@ -13,7 +13,8 @@ const whatsapp = (phone: string, body: string) =>
   `https://wa.me/${phone.startsWith("+") ? phone.slice(1) : `972${phone.slice(1)}`}?text=${encodeURIComponent(body)}`;
 
 export default async function AdminMessages() {
-  const rows = await listMessages(await getDb());
+  const { db } = await adminPage("messages");
+  const rows = await listMessages(db);
   return (
     <>
       <PageTitle>Messages to send by hand</PageTitle>

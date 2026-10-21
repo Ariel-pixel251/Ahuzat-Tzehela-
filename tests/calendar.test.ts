@@ -76,8 +76,9 @@ describe("tags and options", () => {
   test("the tag decides the registration form; no tag, no button", () => {
     expect(eventForm({ tags: ["language-night"] })).toBe("language-night");
     expect(eventForm({ tags: ["party"] })).toBe("general");
-    expect(eventForm({ tags: ["memorial"] })).toBe("memorial");
-    expect(eventForm({ tags: ["digital-support"] })).toBe("digital-support");
+    expect(eventForm({ tags: ["lecture"] })).toBe("general");
+    expect(eventForm({ tags: ["register"] })).toBe("general");
+    expect(eventForm({ tags: ["podcast"] })).toBe("podcast");
     expect(eventForm({ tags: [] })).toBeNull();
     expect(byUid("untagged-1@google.com")[0].tags).toEqual([]);
   });
@@ -175,7 +176,7 @@ describe("fallback to the seed file", () => {
       title: { en: "Board games night", he: "ערב משחקי קופסה" },
     });
     const visit = events.find((e) => e.key === "seed-yocopas-visit-2026-12-14")!;
-    expect(visit).toMatchObject({ allDay: true, endDate: "2026-12-15", tbc: true, tags: ["visit"] });
+    expect(visit).toMatchObject({ allDay: true, endDate: "2026-12-15", tbc: true, tags: [] });
   });
 
   test("seed events are shown but never open for registration", () => {

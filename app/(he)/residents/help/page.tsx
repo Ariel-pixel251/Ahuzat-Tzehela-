@@ -1,16 +1,39 @@
 import type { Metadata } from "next";
-import { requestHelp } from "@/app/actions/residents";
+import Link from "next/link";
+import { bookHelpSlot } from "@/app/actions/residents";
+import { CallIcon } from "@/components/icons";
+import { buttonClass, Notice } from "@/components/ui";
 import { Wizard } from "@/components/Wizard";
-import { residentsText as t } from "@/lib/i18n";
-import { helpSteps } from "@/lib/wizard-steps";
+import { listUpcomingSlots } from "@/lib/db/slots";
+import { residentsText as t, sharedText } from "@/lib/i18n";
+import { tryDb } from "@/lib/server";
+import { helpSteps, slotOptions } from "@/lib/wizard-steps";
 
 export const metadata: Metadata = { title: t.pages.help.title };
+export const dynamic = "force-dynamic";
 
-export default function HelpPage() {
+/** Book digital support: choose an open slot, say what help is needed, leave name and phone. */
+export default async function HelpPage() {
+  const db = await tryDb();
+  const slots = db ? await listUpcomingSlots(db) : [];
+  const hasOpenSlot = slotOptions(slots).some((o) => !o.disabled);
   return (
     <>
-      <h1 className="mb-6 text-4xl font-extrabold">{t.pages.help.title}</h1>
-      <Wizard steps={helpSteps} action={requestHelp} done={t.confirm.help} />
+      <h1 className="text-4xl font-extrabold">{t.pages.help.title}</h1>
+      <p className="mb-6 mt-3 text-xl">{t.pages.help.intro}</p>
+      {!db ? (
+        <Notice kind="warn" className="text-xl">{sharedText.he.errors.unavailable}</Notice>
+      ) : hasOpenSlot ? (
+        <Wizard steps={helpSteps(slots)} action={bookHelpSlot} done={t.confirm.help} doneDetail="slot" />
+      ) : (
+        <>
+          <p className="rounded-2xl border-4 border-ink p-5 text-2xl font-bold">{t.fields.noSlots}</p>
+          <Link href="/residents/callback" className={`${buttonClass.primary} mt-6 w-full min-h-[72px] text-2xl`}>
+            <CallIcon className="size-8" />
+            {t.callMe}
+          </Link>
+        </>
+      )}
     </>
   );
 }

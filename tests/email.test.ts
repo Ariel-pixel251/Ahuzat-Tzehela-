@@ -11,7 +11,7 @@ test("Gmail needs only the address and an app password (spaces removed)", () => 
     secure: true,
     user: "ahuzat@gmail.com",
     pass: "abcdefghijklmnop",
-    from: '"אמיס - אחוזת צהלה - ביחד לדורות" <ahuzat@gmail.com>',
+    from: '"EMIS × אחוזת צהלה" <ahuzat@gmail.com>',
   });
   expect(smtpSettings(env({ SMTP_USER: "me@example.org", SMTP_PASSWORD: "x" }))).toBeNull(); // other mailboxes need SMTP_HOST
   expect(smtpSettings(env({ SMTP_USER: "me@example.org", SMTP_PASSWORD: "x y", SMTP_HOST: "smtp.example.org", SMTP_PORT: "587" }))).toMatchObject({

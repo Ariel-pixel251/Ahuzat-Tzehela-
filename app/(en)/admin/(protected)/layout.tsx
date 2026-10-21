@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { adminLogout } from "@/app/actions/admin";
 import { buttonClass } from "@/components/ui";
+import { BRAND } from "@/config/brand";
 import { requireAdmin } from "@/lib/auth/admin";
 
 export const dynamic = "force-dynamic";
@@ -8,17 +9,14 @@ export const dynamic = "force-dynamic";
 const nav = [
   ["/admin", "Dashboard"],
   ["/admin/events", "Events"],
-  ["/admin/digital", "Digital support"],
+  ["/admin/digital-support", "Digital support"],
   ["/admin/podcast", "Podcast"],
-  ["/admin/lessons", "Lessons"],
-  ["/admin/lectures", "Lectures"],
-  ["/admin/visits", "Visits"],
   ["/admin/callbacks", "Callbacks"],
   ["/admin/messages", "Messages"],
   ["/admin/register", "Register a resident"],
-  ["/admin/print", "Sign-up sheet"],
   ["/admin/leaders", "Leaders"],
-  ["/admin/content", "Content"],
+  ["/admin/safety", "Reports and privacy"],
+  ["/admin/audit", "Audit log"],
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -27,7 +25,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <>
       <header className="no-print border-b-2 border-line bg-sand">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <Link href="/admin" className="text-lg font-extrabold">Ahuzat Tzahala · Admin</Link>
+          <Link href="/admin" className="text-lg font-extrabold">{BRAND.en} · Admin</Link>
           <div className="flex items-center gap-3 text-sm">
             <span>{admin.email}</span>
             <form action={adminLogout}>

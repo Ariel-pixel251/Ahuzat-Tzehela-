@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { PageTitle } from "@/components/ui";
+import { adminEmails, devLoginAllowed, getAdmin, supabaseAuthConfigured } from "@/lib/auth/admin";
 import { deploymentEnv } from "@/lib/env";
 import { setupChecks, type CheckStatus } from "@/lib/setup-check";
 
@@ -14,8 +16,13 @@ const LOOK: Record<CheckStatus, { icon: string; label: string; box: string }> = 
   bad: { icon: "✗", label: "Not working", box: "border-bad bg-bad-soft" },
 };
 
-/** Public page that explains what's configured on this deployment. It never shows secret values. */
+/**
+ * Explains what's configured on this deployment (never secret values). Admins see it; anyone else
+ * only while admin sign-in itself isn't set up (the page is how the owner fixes that).
+ */
 export default async function SetupCheck() {
+  const signInWorks = (supabaseAuthConfigured() && adminEmails().length > 0) || devLoginAllowed();
+  if (signInWorks && !(await getAdmin())) redirect("/admin/login");
   const order: CheckStatus[] = ["bad", "warn", "info", "ok"];
   const checks = [...(await setupChecks())].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
   return (

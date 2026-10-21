@@ -6,14 +6,18 @@ import { getRegistrationByToken } from "@/lib/db/events";
 import { residentsText as t } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/i18n/format";
 import { tryDb } from "@/lib/server";
+import { v } from "@/lib/validation";
 
 export const metadata: Metadata = { title: t.pages.manage.title, robots: { index: false } };
 
-export default async function ManageEvent({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const { token = "" } = await searchParams;
+export const dynamic = "force-dynamic";
+
+export default async function ManageEvent({ searchParams }: { searchParams: Promise<{ token?: string | string[] }> }) {
+  const parsed = v.token.safeParse((await searchParams).token);
   const db = await tryDb();
-  const reg = db && token ? await getRegistrationByToken(db, token) : null;
-  if (!reg) return <Notice kind="bad">{t.pages.manage.invalid}</Notice>;
+  const reg = db && parsed.success ? await getRegistrationByToken(db, parsed.data) : null;
+  if (!reg || !parsed.success) return <Notice kind="bad">{t.pages.manage.invalid}</Notice>;
+  const token = parsed.data;
   return (
     <>
       <h1 className="mb-6 text-4xl font-extrabold">{t.pages.manage.title}</h1>
