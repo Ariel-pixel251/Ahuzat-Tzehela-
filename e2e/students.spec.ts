@@ -2,10 +2,10 @@ import { expect, test } from "@playwright/test";
 
 // Student portal (English): the home page, event registration and podcast sign-up.
 
-test("home: the project's name, and Events, Digital support, Podcast and My sign-ups", async ({ page }) => {
+test("home: the branch's name and tagline, and Events, Digital support, Podcast and My sign-ups", async ({ page }) => {
   await page.goto("/students");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("EMIS × Ahuzat Tzahala");
-  await expect(page.getByText("Podcast, digital support and events, together").first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Together for Generations, EMIS Branch");
+  await expect(page.getByText("The EMIS branch of Together for Generations, in partnership with Ahuzat Tzahala").first()).toBeVisible();
   for (const name of ["Events", "Digital support", "Podcast", "My sign-ups"]) {
     await expect(page.locator("main").getByRole("link", { name: new RegExp(`^${name}`) }).first()).toBeVisible();
   }

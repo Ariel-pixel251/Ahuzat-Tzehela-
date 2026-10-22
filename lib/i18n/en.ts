@@ -66,8 +66,8 @@ export const shared: Shared = {
 };
 
 export const students = {
-  brand: BRAND.en,
-  subtitle: BRAND.subtitle.en,
+  branchName: BRAND.branchName.en,
+  tagline: BRAND.tagline.en,
   nav: {
     label: "Main",
     home: "Home",
@@ -77,7 +77,6 @@ export const students = {
     mine: "My sign-ups",
   },
   skip: "Skip to content",
-  logosHome: "EMIS, Together for Generations, Ahuzat Tzahala: home",
   footer: { privacy: "Privacy notice", report: "Report a problem", residents: "פורטל הדיירים" },
   home: {
     keyEvents: "Coming up",

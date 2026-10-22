@@ -35,10 +35,9 @@ export const shared: Shared = {
 };
 
 export const residents = {
-  brand: BRAND.he,
-  subtitle: BRAND.subtitle.he,
+  branchName: BRAND.branchName.he,
+  tagline: BRAND.tagline.he,
   backHome: "חזרה לדף הראשי",
-  logosHome: "EMIS, ביחד לדורות, אחוזת צהלה: לדף הראשי",
   textBigger: "הגדל טקסט",
   footer: { label: "עוד", status: "מה קורה עם הבקשה שלי?", privacy: "פרטיות", report: "דיווח על בעיה" },
   home: {

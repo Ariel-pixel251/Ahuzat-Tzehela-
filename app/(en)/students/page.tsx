@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { AgendaItem } from "@/components/students/Agenda";
 import { ButtonLink } from "@/components/ui";
-import { Wordmark } from "@/components/Wordmark";
 import { upcomingWithCounts } from "@/lib/event-data";
 import { studentsText as t } from "@/lib/i18n";
 
@@ -20,11 +19,12 @@ export default async function StudentsHome() {
     .sort((a, b) => a.date.localeCompare(b.date));
   return (
     <>
-      <Wordmark name={t.brand} subtitle={t.subtitle} accent="emis" className="mb-8" />
+      <h1 className="sr-only">{t.branchName}</h1>
+      <p className="mb-8 text-lg font-bold text-ink">{t.tagline}</p>
       <ul className="grid gap-4 sm:grid-cols-2">
         {cards.map((c) => (
           <li key={c.href}>
-            <Link href={c.href} className="block h-full rounded-2xl border-2 border-t-8 border-line border-t-emis p-5 text-ink no-underline hover:border-brand hover:border-t-emis">
+            <Link href={c.href} className="block h-full rounded-2xl border-2 border-t-8 border-line border-t-teal p-5 text-ink no-underline hover:border-brand">
               <h2 className="text-xl font-extrabold text-brand">{c.title}</h2>
               <p className="mt-1">{c.text}</p>
             </Link>

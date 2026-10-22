@@ -12,9 +12,11 @@ where they conflict) and how it was implemented. The source notes are in `meetin
   "report a problem".
 - **Removed:** visit requests, courses and the school timetable page, private lessons, share/invite page and
   QR poster, lecture proposals, "memory in the living room", the announcements banner, the paper sign-up sheet.
-- **Branding:** "EMIS × אחוזת צהלה" / "EMIS × Ahuzat Tzahala" as the main heading (in `config/brand.ts`), with the
-  subtitle "פודקאסט, ליווי דיגיטלי ואירועים - ביחד" / "Podcast, digital support and events, together".
-  No generic greeting.
+- **Branding (v2, 2026-10-22, replaces the "EMIS × …" heading):** the site is the **EMIS branch** of the larger
+  organisation "ביחד לדורות" (Together for Generations), in partnership with Ahuzat Tzahala, and must never look
+  like the whole organisation's website. The organisation's logo always comes with the branch label "סניף EMIS" /
+  "EMIS Branch" (`components/BrandLockup.tsx`, a test checks every page); EMIS and Ahuzat Tzahala appear smaller
+  as partners. Footer disclaimer (wording to be confirmed). Names and wording in `config/brand.ts`. No greeting.
 - **Digital support slots:** admins create, edit, cancel, repeat weekly and block dates; residents book in a
   wizard (time → need → name and phone → review); students volunteer; no overbooking; contact details only for
   the student's own slots, after the code of conduct and within 48 hours; confirmations, reminders, change notices.

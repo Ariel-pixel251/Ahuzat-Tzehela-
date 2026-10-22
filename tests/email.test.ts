@@ -12,7 +12,7 @@ test("Gmail needs only the address and an app password (spaces removed)", () => 
     secure: true,
     user: "ahuzat@gmail.com",
     pass: "abcdefghijklmnop",
-    from: '"EMIS × אחוזת צהלה" <ahuzat@gmail.com>',
+    from: '"ביחד לדורות, סניף EMIS" <ahuzat@gmail.com>',
   });
   expect(smtpSettings(env({ SMTP_USER: "me@example.org", SMTP_PASSWORD: "x" }))).toBeNull(); // other mailboxes need SMTP_HOST
   expect(smtpSettings(env({ SMTP_USER: "me@example.org", SMTP_PASSWORD: "x y", SMTP_HOST: "smtp.example.org", SMTP_PORT: "587" }))).toMatchObject({
@@ -73,7 +73,7 @@ test("sign-in emails go out through the mailbox", async () => {
   expect(received[0].data).toContain("text/html");
 });
 
-test("the HTML email: the three logos from the site's own address, alt text in the reader's language, the text escaped", () => {
+test("the HTML email: the logos from the site's own address, alt text in the reader's language, the text escaped", () => {
   process.env.NEXT_PUBLIC_SITE_URL = "https://beyachad-ledorot.vercel.app/";
   try {
     const he = emailHtml("שלום <b>רבקה</b>\nקישור: https://beyachad-ledorot.vercel.app/residents/manage?token=a&b=c", "he");
@@ -82,6 +82,7 @@ test("the HTML email: the three logos from the site's own address, alt text in t
     }
     expect(he).toContain('alt="אחוזת צהלה"');
     expect(he).toContain('alt="ביחד לדורות"');
+    expect(he).toContain(">סניף EMIS</td>");
     expect(he).toContain('alt="EMIS"');
     expect(he).toContain('dir="rtl"');
     // names can't add HTML; line breaks and links are kept
@@ -91,6 +92,7 @@ test("the HTML email: the three logos from the site's own address, alt text in t
     const en = emailHtml("Hi", "en");
     expect(en).toContain('alt="Ahuzat Tzahala"');
     expect(en).toContain('alt="Together for Generations"');
+    expect(en).toContain(">EMIS Branch</td>");
     expect(en).toContain('dir="ltr"');
   } finally {
     delete process.env.NEXT_PUBLIC_SITE_URL;

@@ -6,7 +6,11 @@ import type { Message } from "./index";
 // values below are filled in, and each one is cleaned first (no line breaks or control
 // characters, limited length), since names and event titles come from people and the calendar.
 
-const sign = { en: `\n\n${BRAND.en}`, he: `\n\n${BRAND.he}` };
+// signature: the organisation always with the branch, and the partner
+const sign = {
+  en: `\n\n${BRAND.branchName.en}\n${BRAND.partnersLabel.en} Ahuzat Tzahala`,
+  he: `\n\n${BRAND.branchName.he}\n${BRAND.partnersLabel.he} אחוזת צהלה`,
+};
 
 /** One line of plain text: control characters and line breaks removed, length limited. */
 export function clean(value: string | null | undefined, max = 200): string {

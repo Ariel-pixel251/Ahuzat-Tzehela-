@@ -1,45 +1,52 @@
 import Link from "next/link";
-import { BrandStripe, Logo } from "@/components/Logos";
+import { BrandLockup } from "@/components/BrandLockup";
+import { PartnerLogo, PartnersStrip } from "@/components/Logos";
 import { BRAND } from "@/config/brand";
 
+const door =
+  "flex min-h-[96px] w-full items-center justify-center gap-4 rounded-2xl border-4 bg-white px-5 py-4 text-center font-extrabold text-ink no-underline";
+
 /**
- * Landing page: the partners' logos (EMIS × Ahuzat Tzahala) and the project's name, the program's
- * logo ("ביחד לדורות") below, then two big doors. The Hebrew parts are marked up as Hebrew, right to left.
+ * Landing page, calm and centred: "ביחד לדורות" with the branch label, the tagline, two equal doors
+ * (each with its partner's logo and colour), then the partners, the disclaimer and the privacy links.
+ * Bilingual: Hebrew first for the residents, English for the students.
  */
 export default function Landing() {
   return (
-    <main id="main" className="mx-auto flex min-h-svh max-w-xl flex-col justify-center gap-6 bg-paper px-4 py-10">
-      <BrandStripe className="overflow-hidden rounded-full" />
-      <header lang="he" dir="rtl" className="text-center">
-        {/* the two partners side by side, in reading order of the name ("EMIS × אחוזת צהלה") */}
-        <div dir="ltr" className="flex items-center justify-center gap-4 sm:gap-6">
-          <Logo name="emis" place="landing" locale="he" priority />
-          <span aria-hidden="true" className="text-3xl font-black text-muted">×</span>
-          <Logo name="ahuzat" place="landing" locale="he" priority />
+    <div className="flex min-h-svh flex-col bg-paper">
+      <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-8 px-4 py-10">
+        <header className="flex flex-col items-center gap-4 text-center">
+          <h1 className="sr-only">{BRAND.branchName.he} · {BRAND.branchName.en}</h1>
+          <BrandLockup locale="he" variant="landing" priority />
+          <div className="space-y-1">
+            <p lang="he" dir="rtl" className="text-[22px] font-bold text-ink">{BRAND.tagline.he}</p>
+            <p lang="en" dir="ltr" className="text-[22px] text-ink">{BRAND.tagline.en}</p>
+          </div>
+        </header>
+        {/* two equal doors: stacked on phones, side by side from 640px */}
+        <div className="grid w-full gap-4 sm:grid-cols-2">
+          <Link href="/residents" lang="he" dir="rtl" className={`${door} border-maroon text-3xl hover:bg-maroon-soft`}>
+            <PartnerLogo name="ahuzat" place="door" locale="he" decorative />
+            <span>אני דייר/ת באחוזת צהלה</span>
+          </Link>
+          <Link href="/students" className={`${door} border-emis text-2xl hover:bg-sand`}>
+            <PartnerLogo name="emis" place="door" locale="en" decorative />
+            <span>I&apos;m an EMIS student</span>
+          </Link>
         </div>
-        <h1 className="mt-6 text-[2.6rem] font-black leading-tight tracking-tight sm:text-5xl">
-          {BRAND.he}
-        </h1>
-        <div className="mt-5 flex justify-center">
-          <Logo name="beyachad" place="landing" locale="he" priority />
+      </main>
+      <footer className="border-t-2 border-line bg-sand">
+        <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-4 py-6 text-center">
+          <PartnersStrip locale="he" place="partners" bilingual className="w-full rounded-2xl bg-white p-4" />
+          {/* the wording is a placeholder, to be confirmed with the organisation (config/brand.ts) */}
+          <p lang="he" dir="rtl">{BRAND.disclaimer.he}</p>
+          <p lang="en" dir="ltr" className="text-sm">{BRAND.disclaimer.en}</p>
+          <p className="flex flex-wrap justify-center gap-x-6">
+            <Link href="/residents/privacy" lang="he" className="inline-flex min-h-11 items-center font-bold text-brand underline">פרטיות</Link>
+            <Link href="/students/privacy" className="inline-flex min-h-11 items-center font-bold text-brand underline">Privacy notice</Link>
+          </p>
         </div>
-        <p className="mt-4 text-xl font-bold">{BRAND.subtitle.he}</p>
-        <p lang="en" dir="ltr" className="mt-1 text-lg">{BRAND.subtitle.en}</p>
-      </header>
-      <Link
-        href="/students"
-        className="flex min-h-[96px] items-center justify-center rounded-2xl border-4 border-brand bg-brand px-6 text-center text-2xl font-extrabold text-white hover:bg-brand-dark"
-      >
-        I&apos;m an EMIS student
-      </Link>
-      <Link
-        href="/residents"
-        lang="he"
-        dir="rtl"
-        className="flex min-h-[96px] items-center justify-center rounded-2xl border-4 border-maroon bg-white px-6 text-center text-3xl font-extrabold text-maroon hover:bg-maroon-soft"
-      >
-        אני דייר/ת באחוזת צהלה
-      </Link>
-    </main>
+      </footer>
+    </div>
   );
 }
