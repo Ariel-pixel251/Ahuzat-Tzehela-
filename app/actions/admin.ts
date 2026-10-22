@@ -460,17 +460,7 @@ export async function unpairPodcast(_: ActionState, fd: FormData): Promise<Actio
   });
 }
 
-// ---------------------------------------------------------------- call-backs and the manual message queue
-
-export async function toggleCallback(_: ActionState, fd: FormData): Promise<ActionState> {
-  return asAdmin(async (db, admin) => {
-    const id = idOf(fd);
-    if (!id) return badId;
-    await misc.toggleCallbackHandled(db, id);
-    await misc.audit(db, admin.email, "callback.toggle", id);
-    return done();
-  });
-}
+// ---------------------------------------------------------------- the manual message queue
 
 export async function markMessageSent(_: ActionState, fd: FormData): Promise<ActionState> {
   return asAdmin(async (db, admin) => {
@@ -664,14 +654,6 @@ export async function registerOnBehalf(_: ActionState, fd: FormData): Promise<Ac
       if (res.status === "duplicate") return { ok: false, message: "This phone or email is already signed up for the podcast." };
       if (res.status !== "joined") return { ok: false, message: "That podcast time is gone (deleted or already started). Choose another." };
       return { ok: true, message: `Signed up. Request code: ${res.code}`, code: res.code };
-    }
-
-    if (type === "callback") {
-      const r = validate(form(common), formObject(fd));
-      if (!r.ok) return fail(r.errors);
-      await misc.createCallback(db, { name: r.data.name, phone: r.data.phone, registered_by: staffOf(r.data.staff) });
-      await misc.audit(db, admin.email, "on_behalf.callback");
-      return done("Callback request saved.");
     }
 
     return { ok: false, message: "Choose what to register." };

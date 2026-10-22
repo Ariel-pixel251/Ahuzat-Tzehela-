@@ -50,22 +50,6 @@ export const listMessages = (db: Db) =>
 export const markMessageSent = (db: Db, id: string) =>
   db.query(`update outbound_messages set status = 'sent', sent_at = now() where id = $1`, [id]);
 
-// ---------------------------------------------------------------- call-back requests
-
-export const createCallback = (db: Db, c: { name: string; phone: string; registered_by: string | null }) =>
-  db.query(`insert into callback_requests (name, phone, registered_by) values ($1, $2, $3)`, [c.name, c.phone, c.registered_by]);
-
-export const listCallbacks = (db: Db) =>
-  db.query<{ id: string; created_at: Date; name: string; phone: string; handled: boolean; registered_by: string | null }>(
-    `select id, created_at, name, phone, handled, registered_by from callback_requests order by handled, created_at desc`,
-  );
-
-export const toggleCallbackHandled = (db: Db, id: string) =>
-  db.query(
-    `update callback_requests set handled = not handled, handled_at = case when handled then null else now() end where id = $1`,
-    [id],
-  );
-
 // ---------------------------------------------------------------- 4-digit codes: lockout after 5 wrong tries
 
 export const MAX_CODE_FAILURES = 5;

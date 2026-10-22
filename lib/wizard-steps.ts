@@ -135,8 +135,6 @@ export function podcastSteps(times: PodcastTime[]): WizardStep[] {
   ];
 }
 
-export const callbackSteps: WizardStep[] = [contactStep({ email: false })];
-
 export const reportSteps: WizardStep[] = [
   { id: "message", title: f.reportMessage, fields: [{ kind: "text", name: "message", label: f.reportMessageLabel, multiline: true }] },
   {

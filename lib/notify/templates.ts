@@ -92,7 +92,7 @@ export const templates = {
       body:
         `שלום ${clean(p.name, 100)},\nשמרנו לכם מקום: ${clean(p.slot, 300)}.\nמתנדב יחכה לכם שם.` +
         `\nקוד הבקשה: ${clean(p.code, 4)}` +
-        (p.manageUrl ? `\nלביטול: ${p.manageUrl}` : "\nלביטול, בקשו שנתקשר אליכם ואמרו את הקוד.") +
+        (p.manageUrl ? `\nלביטול: ${p.manageUrl}` : "\nלביטול, השיבו להודעה הזו וכתבו את הקוד.") +
         sign.he,
     };
   },
@@ -119,7 +119,7 @@ export const templates = {
     return locale === "he"
       ? {
           subject: "שינוי במועד העזרה עם הטלפון או המחשב",
-          body: `שלום ${clean(p.name, 100)},\nהמועד השתנה.\nבמקום: ${clean(p.before, 300)}\nעכשיו: ${clean(p.after, 300)}\nאם לא מתאים לכם, בקשו שנתקשר אליכם.${sign.he}`,
+          body: `שלום ${clean(p.name, 100)},\nהמועד השתנה.\nבמקום: ${clean(p.before, 300)}\nעכשיו: ${clean(p.after, 300)}\nאם לא מתאים לכם, השיבו להודעה הזו.${sign.he}`,
         }
       : {
           subject: "Digital support: your slot changed",

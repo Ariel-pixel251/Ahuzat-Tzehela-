@@ -28,7 +28,7 @@ Please treat any weakness as urgent.
 | Abuse | Honeypot field, per-address rate limits on every form and lookup (keyed HMAC of the address, IPv6 per /64), and daily caps on event and slot sign-ups. Admins can block a phone or email: the person is signed out at once and their slot places are cancelled. |
 | Email | Fixed templates; every value is cleaned of line breaks and control characters, so names or event titles can't add email headers. |
 | Errors and logs | People see friendly messages only. Server logs never include phone numbers or emails (`lib/log.ts` removes them). |
-| Retention | A daily job deletes event registrations 90 days after the event, slots and bookings 90 days after the slot, cancelled sign-ups and call-back requests after 30 days, students who aren't signed in and have no slot place after 30 days, podcast sign-ups and problem reports after one year, and the audit log after two years. Blocked phones/emails are kept while the block is needed. Admins can delete everything about a person in one step (also their details as a student's parent or guardian). |
+| Retention | A daily job deletes event registrations 90 days after the event, slots and bookings 90 days after the slot, cancelled sign-ups after 30 days, students who aren't signed in and have no slot place after 30 days, podcast sign-ups and problem reports after one year, and the audit log after two years. Blocked phones/emails are kept while the block is needed. Admins can delete everything about a person in one step (also their details as a student's parent or guardian). |
 | Supply chain | Dependabot (weekly), `npm audit` in CI (production dependencies must have no high or critical issues), gitleaks over the whole git history. |
 
 ## Known, accepted findings

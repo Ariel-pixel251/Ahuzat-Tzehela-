@@ -37,3 +37,15 @@ export function studentEmailAllowed(email: string, domains = studentEmailDomains
 export function deploymentEnv() {
   return process.env.VERCEL_ENV ?? "local";
 }
+
+/**
+ * The site's public address for things that must point at production: email images and the share
+ * image. NEXT_PUBLIC_SITE_URL, else SITE_URL, else Vercel's production address.
+ */
+export function publicSiteUrl(): string {
+  const url =
+    readEnv("NEXT_PUBLIC_SITE_URL") ??
+    readEnv("SITE_URL") ??
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
+  return url.replace(/\/+$/, "");
+}

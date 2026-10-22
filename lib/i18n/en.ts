@@ -77,6 +77,7 @@ export const students = {
     mine: "My sign-ups",
   },
   skip: "Skip to content",
+  logosHome: "EMIS, Together for Generations, Ahuzat Tzahala: home",
   footer: { privacy: "Privacy notice", report: "Report a problem", residents: "פורטל הדיירים" },
   home: {
     keyEvents: "Coming up",

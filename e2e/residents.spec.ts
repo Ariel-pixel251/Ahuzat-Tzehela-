@@ -3,12 +3,13 @@ import { contact, next, send } from "./helpers";
 
 // Full resident flows at 360px: everything by big buttons, one question per screen.
 
-test("the home page: the project's name and four big buttons, no greeting", async ({ page }) => {
+test("the home page: the project's name and three big buttons, no greeting and no 'contact us'", async ({ page }) => {
   await page.goto("/residents");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("EMIS × אחוזת צהלה");
   await expect(page.getByText("פודקאסט, ליווי דיגיטלי ואירועים - ביחד")).toBeVisible();
   const buttons = page.locator("main ul a");
-  await expect(buttons).toHaveText(["מה קורה השבוע?", "עזרה עם הטלפון או המחשב", "פודקאסט", "צרו איתי קשר"]);
+  await expect(buttons).toHaveText(["מה קורה השבוע?", "עזרה עם הטלפון או המחשב", "פודקאסט"]);
+  await expect(page.getByText(/צרו איתי קשר|בקשו שאתקשר/)).toHaveCount(0);
   await expect(page.getByText(/שלום/)).toHaveCount(0);
   await expect(page).toHaveTitle("EMIS × אחוזת צהלה");
 });
@@ -95,17 +96,22 @@ test("report a problem, from the link on every page", async ({ page }) => {
   await expect(page.getByText(/^\d{4}$/)).toHaveCount(0);
 });
 
-test("call me back, from the button on every page", async ({ page }) => {
-  await page.goto("/residents/events");
-  await page.getByRole("link", { name: "בקשו שאתקשר אליכם" }).click();
-  await expect(page.getByRole("heading", { name: "נשמח להתקשר אליכם" })).toBeVisible();
-  await contact(page, "משה", "03-1234567");
-  await send(page);
-  await expect(page.getByText("נתקשר אליכם בקרוב.")).toBeVisible();
+test("'contact us' is gone: no call-back page or button anywhere", async ({ page }) => {
+  for (const path of ["/residents", "/residents/events", "/residents/help", "/residents/podcast"]) {
+    await page.goto(path);
+    await expect(page.getByRole("link", { name: /שאתקשר|צרו איתי קשר/ })).toHaveCount(0);
+  }
+  const res = await page.goto("/residents/callback");
+  expect(res?.status()).toBe(404);
 });
 
-test("the call-me-back wizard can be completed with the keyboard only", async ({ page }) => {
-  await page.goto("/residents/callback");
+test("a wizard (report a problem) can be completed with the keyboard only", async ({ page }) => {
+  await page.goto("/residents/report");
+  await page.getByLabel("מה קרה", { exact: true }).focus();
+  await page.keyboard.type("משהו לא עובד");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter"); // "הבא"
+  await expect(page.getByLabel("שם", { exact: true })).toBeVisible();
   await page.getByLabel("שם", { exact: true }).focus();
   await page.keyboard.type("דוד");
   await page.keyboard.press("Tab");

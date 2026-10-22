@@ -25,7 +25,7 @@ export function DeletePersonForm() {
       <Checkbox
         name="confirm"
         required
-        label="I understand this deletes every registration, booking, podcast sign-up, call-back, message, student account and report with this phone or email, and can't be undone."
+        label="I understand this deletes every registration, booking, podcast sign-up, message, student account and report with this phone or email, and can't be undone."
       />
     </ActionForm>
   );

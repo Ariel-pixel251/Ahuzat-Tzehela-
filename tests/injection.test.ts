@@ -132,7 +132,6 @@ const FORMS: { name: string; action: Action; valid: () => Record<string, string 
     action: residents.joinPodcastAsResident,
     valid: () => ({ topics: ["history"], language: "he", time: podcastTimeId, name: "Rivka", phone: `053${String(1000000 + ip).slice(-7)}`, email: "" }),
   },
-  { name: "resident: call me back", action: residents.requestCallback, valid: () => ({ name: "Moshe", phone: "0541234567" }) },
   { name: "resident: report a problem", action: residents.reportProblemAsResident, valid: () => ({ message: "Something happened", name: "", phone: "" }) },
   { name: "resident: status lookup", action: residents.checkStatus, valid: () => ({ phone: "0529998877", code: "1234" }) },
   { name: "resident: cancel booking link", action: residents.cancelHelpByToken, valid: () => ({ token: "a".repeat(43) }) },
@@ -201,13 +200,14 @@ describe("injection and XSS payloads in every field", () => {
   });
 
   test("names only allow letters and name punctuation", async () => {
-    const res = await residents.requestCallback(null, fd({ name: "<b>Moshe</b>", phone: "0541234567" }));
+    const podcastForm = FORMS.find((f) => f.name === "resident: podcast")!;
+    const res = await podcastForm.action(null, fd({ ...podcastForm.valid(), name: "<b>Moshe</b>" }));
     expect(res?.ok).toBe(false);
     expect(res?.errors?.name).toBeTruthy();
   });
 
   test("unknown fields are rejected", async () => {
-    const res = await residents.requestCallback(null, fd({ name: "Moshe", phone: "0541234567", is_admin: "true" }));
+    const res = await residents.reportProblemAsResident(null, fd({ message: "Help", name: "Moshe", phone: "0541234567", is_admin: "true" }));
     expect(res?.ok).toBe(false);
   });
 

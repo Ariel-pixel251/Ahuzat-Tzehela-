@@ -2,14 +2,9 @@ import "@fontsource-variable/heebo";
 import "../globals.css";
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { BRAND } from "@/config/brand";
+import { brandMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: { default: BRAND.en, template: `%s · ${BRAND.en}` },
-  description: BRAND.description.en,
-  openGraph: { title: BRAND.en, description: BRAND.description.en, siteName: BRAND.en, locale: "en_GB", type: "website" },
-  robots: { index: false },
-};
+export const metadata: Metadata = brandMetadata("en");
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 

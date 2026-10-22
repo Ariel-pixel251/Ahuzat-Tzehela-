@@ -1,6 +1,7 @@
 import { SMTPServer } from "smtp-server";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { emailProvider, sendEmail } from "@/lib/notify";
+import { emailHtml } from "@/lib/notify/html";
 import { smtpSettings } from "@/lib/notify/smtp";
 
 test("Gmail needs only the address and an app password (spaces removed)", () => {
@@ -66,6 +67,34 @@ test("sign-in emails go out through the mailbox", async () => {
   expect(received).toHaveLength(1);
   expect(received[0]).toMatchObject({ from: "site@example.org", to: ["dana@em-is.org"], user: "site@example.org" });
   expect(received[0].data).toContain("Subject: Your sign-in link");
+  // plain text and HTML (with the logos) in one email
+  expect(received[0].data).toContain("multipart/alternative");
+  expect(received[0].data).toContain("text/plain");
+  expect(received[0].data).toContain("text/html");
+});
+
+test("the HTML email: the three logos from the site's own address, alt text in the reader's language, the text escaped", () => {
+  process.env.NEXT_PUBLIC_SITE_URL = "https://beyachad-ledorot.vercel.app/";
+  try {
+    const he = emailHtml("שלום <b>רבקה</b>\nקישור: https://beyachad-ledorot.vercel.app/residents/manage?token=a&b=c", "he");
+    for (const file of ["emis.png", "ahuzat-tzahala.png", "beyachad-ledorot.png"]) {
+      expect(he).toContain(`src="https://beyachad-ledorot.vercel.app/logos/email/${file}"`);
+    }
+    expect(he).toContain('alt="אחוזת צהלה"');
+    expect(he).toContain('alt="ביחד לדורות"');
+    expect(he).toContain('alt="EMIS"');
+    expect(he).toContain('dir="rtl"');
+    // names can't add HTML; line breaks and links are kept
+    expect(he).toContain("&lt;b&gt;רבקה&lt;/b&gt;<br>");
+    expect(he).not.toContain("<b>");
+    expect(he).toContain('<a href="https://beyachad-ledorot.vercel.app/residents/manage?token=a&amp;b=c"');
+    const en = emailHtml("Hi", "en");
+    expect(en).toContain('alt="Ahuzat Tzahala"');
+    expect(en).toContain('alt="Together for Generations"');
+    expect(en).toContain('dir="ltr"');
+  } finally {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+  }
 });
 
 test("a wrong password is reported as failed, not sent", async () => {

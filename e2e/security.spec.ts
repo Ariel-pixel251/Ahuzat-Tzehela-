@@ -24,9 +24,9 @@ test("pages work under the CSP (scripts run: the wizard moves on)", async ({ pag
   page.on("console", (m) => {
     if (/Content Security Policy/i.test(m.text())) violations.push(m.text());
   });
-  await page.goto("/residents/callback");
-  await page.getByLabel("שם", { exact: true }).fill("משה");
-  await page.getByLabel("טלפון", { exact: true }).fill("0541234567");
+  await page.goto("/residents/report");
+  await page.getByLabel("מה קרה", { exact: true }).fill("בדיקה");
+  await page.getByRole("button", { name: "הבא", exact: true }).click();
   await page.getByRole("button", { name: "הבא", exact: true }).click();
   await expect(page.getByRole("heading", { name: "זה מה שמילאתם:" })).toBeVisible();
   expect(violations).toEqual([]);

@@ -5,7 +5,7 @@ import { Badge, Notice, PageTitle } from "@/components/ui";
 import { eventSummaries, HEALTH_LABEL } from "@/lib/admin-data";
 import { daysFromToday, getCalendar } from "@/lib/calendar";
 import { adminPage } from "@/lib/admin-page";
-import { listCallbacks, listMessages, listProblemReports } from "@/lib/db/misc";
+import { listMessages, listProblemReports } from "@/lib/db/misc";
 import { listUpcomingSlots } from "@/lib/db/slots";
 import { listParticipants } from "@/lib/db/podcast";
 
@@ -14,11 +14,10 @@ export const metadata: Metadata = { title: "Admin dashboard" };
 export default async function Dashboard() {
   const { db } = await adminPage();
   const calendar = await getCalendar();
-  const [events, slots, people, callbacks, messages, reports] = await Promise.all([
+  const [events, slots, people, messages, reports] = await Promise.all([
     eventSummaries(db, calendar),
     listUpcomingSlots(db),
     listParticipants(db),
-    listCallbacks(db),
     listMessages(db),
     listProblemReports(db),
   ]);
@@ -48,7 +47,6 @@ export default async function Dashboard() {
         <Stat label="Booked slots still needing helpers" value={needHelpers.length} tone={needHelpers.length ? "warn" : "neutral"} />
         <Stat label="New problem reports" value={reports.filter((r) => r.status === "new").length} tone={reports.some((r) => r.status === "new") ? "warn" : "neutral"} />
         <Stat label="Podcast people without a pair" value={people.filter((p) => p.active && p.status !== "paired").length} />
-        <Stat label="Open callback requests" value={callbacks.filter((c) => !c.handled).length} tone={callbacks.some((c) => !c.handled) ? "warn" : "neutral"} />
         <Stat label="Messages to send by hand" value={messages.filter((m) => m.status === "pending").length} tone={messages.some((m) => m.status === "pending") ? "warn" : "neutral"} />
         <Stat label="Cancelled or changed events" value={problems.length} tone={problems.length ? "warn" : "neutral"} />
       </div>

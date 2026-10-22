@@ -50,14 +50,15 @@ async function checkDatabase(): Promise<Check[]> {
       },
     ];
   }
-  let row: { functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean };
+  let row: { functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean; callbacks_removed: boolean };
   try {
     const db = await getDb();
     // one query proves the connection, the tables (digital_slots), the functions (hit_rate_limit),
     // and whether tables from before the 2026 rewrite are still there
-    [row] = await db.query<{ functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean }>(
+    [row] = await db.query<{ functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean; callbacks_removed: boolean }>(
       `select to_regproc('public.hit_rate_limit') is not null as functions,
               to_regproc('public.podcast_join') is not null as podcast_times,
+              to_regclass('public.callback_requests') is null as callbacks_removed,
               to_regclass('public.digital_slots') is not null as schema,
               to_regclass('public.lesson_topics') is not null or to_regclass('public.digital_requests') is not null as old,
               case when to_regclass('public.digital_slots') is null then 0
@@ -89,6 +90,16 @@ async function checkDatabase(): Promise<Check[]> {
         status: "bad",
         detail: "The database is missing the podcast times update, so podcast sign-ups and the podcast admin page don't work.",
         fix: "In Supabase → SQL Editor → New query, paste supabase/migrations/0002_podcast_times.sql from GitHub and click Run (once).",
+      },
+    ];
+  }
+  if (!row.callbacks_removed) {
+    return [
+      {
+        name: "Database update (remove call-back requests)",
+        status: "bad",
+        detail: "The database still has the old call-back requests table, so the daily clean-up and \"delete a person\" use old rules.",
+        fix: "In Supabase → SQL Editor → New query, paste supabase/migrations/0003_remove_callback_requests.sql from GitHub and click Run (once).",
       },
     ];
   }

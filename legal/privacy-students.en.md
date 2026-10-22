@@ -3,7 +3,7 @@
 
 ## Who runs this site
 
-This site is run by **[Organisation name]** for the EMIS × Ahuzat Tzahala project. Questions or requests: **[contact email]**.
+This site is run by **[Organisation name]** for the EMIS × Ahuzat Tzahala project. Questions or requests: {{contact_email}}.
 
 ## What we collect and why
 
@@ -25,13 +25,13 @@ We don't ask for ID numbers, addresses or health details.
 
 - Event registrations: deleted 90 days after the event.
 - Digital support bookings and volunteer places: deleted 90 days after the slot.
-- Cancelled sign-ups and call-back requests: deleted after 30 days.
+- Cancelled sign-ups: deleted after 30 days.
 - Your student account: deleted 30 days after you were last signed in, unless you have a place in a slot.
 - Podcast sign-ups and problem reports: deleted after one year.
 
 ## Your rights
 
-You can ask to see, correct or delete your data at any time: email **[contact email]** or ask a project leader. Admins can delete everything stored about a person in one step.
+You can ask to see, correct or delete your data at any time: email {{contact_email}} or ask a project leader. Admins can delete everything stored about a person in one step.
 
 ## We don't sell your data
 
