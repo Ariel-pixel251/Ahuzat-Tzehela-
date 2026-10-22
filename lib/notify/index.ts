@@ -1,6 +1,8 @@
 import { queueMessage } from "@/lib/db/misc";
 import { readEnv } from "@/lib/env";
+import type { Locale } from "@/lib/i18n";
 import { logError } from "@/lib/log";
+import { emailHtml } from "./html";
 import { smtpSettings } from "./smtp";
 import type { Db } from "@/lib/db/types";
 
@@ -18,7 +20,7 @@ export function emailConfigured() {
   return emailProvider() !== null;
 }
 
-type Transport = { sendMail(m: { from: string; to: string; subject: string; text: string }): Promise<unknown>; verify(): Promise<unknown> };
+type Transport = { sendMail(m: { from: string; to: string; subject: string; text: string; html: string }): Promise<unknown>; verify(): Promise<unknown> };
 let transport: { key: string; transport: Transport } | undefined;
 
 /** The SMTP connection, reused between emails (rebuilt if the settings change). */
@@ -45,8 +47,11 @@ export async function smtpTransport(): Promise<Transport | null> {
 /** An email header value: never a line break (no header injection). */
 const headerSafe = (v: string) => v.replace(/[\r\n]+/g, " ").trim();
 
-/** Sends an email. Without an email service it's logged instead (local development only). */
-export async function sendEmail(to: string, msg: Message): Promise<"sent" | "logged" | "failed"> {
+/**
+ * Sends an email: plain text, plus an HTML version with the logos. `locale` is the reader's
+ * language. Without an email service it's logged instead (local development only).
+ */
+export async function sendEmail(to: string, msg: Message, locale: Locale = "en"): Promise<"sent" | "logged" | "failed"> {
   const recipient = headerSafe(to);
   const subject = headerSafe(msg.subject);
   const provider = emailProvider();
@@ -60,7 +65,7 @@ export async function sendEmail(to: string, msg: Message): Promise<"sent" | "log
   }
   try {
     if (provider === "smtp") {
-      await (await smtpTransport())!.sendMail({ from: headerSafe(smtpSettings()!.from), to: recipient, subject, text: msg.body });
+      await (await smtpTransport())!.sendMail({ from: headerSafe(smtpSettings()!.from), to: recipient, subject, text: msg.body, html: emailHtml(msg.body, locale) });
       return "sent";
     }
     const key = readEnv("RESEND_API_KEY")!;
@@ -68,7 +73,7 @@ export async function sendEmail(to: string, msg: Message): Promise<"sent" | "log
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: recipient, subject, text: msg.body }),
+      body: JSON.stringify({ from, to: recipient, subject, text: msg.body, html: emailHtml(msg.body, locale) }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) throw new Error(`Resend HTTP ${res.status}`);
@@ -103,7 +108,7 @@ function textProvider(): TextMessageProvider {
  * Students: email; a text message only if there is no email.
  */
 export async function notify(db: Db, to: Recipient, msg: Message) {
-  if (to.email) await sendEmail(to.email, msg);
+  if (to.email) await sendEmail(to.email, msg, to.portal === "resident" ? "he" : "en");
   if (to.phone && (to.portal === "resident" || !to.email)) {
     await textProvider().send(db, { phone: to.phone, name: to.name }, msg.body);
   }

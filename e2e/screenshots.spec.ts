@@ -40,3 +40,15 @@ test("screenshots", async ({ page }) => {
   await page.goto("/students/digital-support");
   await shot(page, "students-slots");
 });
+
+// The logo placements at mobile and desktop width (docs/screenshots/logos/).
+test("logo screenshots", async ({ page }) => {
+  for (const [label, width] of [["mobile", 360], ["desktop", 1280]] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [name, path] of [["landing", "/"], ["residents", "/residents"], ["students", "/students"], ["residents-privacy", "/residents/privacy"]] as const) {
+      await page.goto(path);
+      await page.waitForLoadState("networkidle");
+      await shot(page, `logos/after-${name}-${label}`);
+    }
+  }
+});

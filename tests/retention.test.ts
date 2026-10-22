@@ -3,7 +3,6 @@ import * as events from "@/lib/db/events";
 import {
   clearCodeFailures,
   codeAttempt,
-  createCallback,
   createProblemReport,
   deletePersonData,
   MAX_CODE_FAILURES,
@@ -22,7 +21,7 @@ beforeEach(async () => {
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 const count = async (table: string) => {
-  const allowed = ["event_registrations", "digital_slots", "digital_bookings", "callback_requests", "podcast_participants", "students", "problem_reports", "outbound_messages"];
+  const allowed = ["event_registrations", "digital_slots", "digital_bookings", "podcast_participants", "students", "problem_reports", "outbound_messages"];
   if (!allowed.includes(table)) throw new Error("unknown table");
   // the table name comes from the fixed list above, never from input
   const [row] = await db.query<{ n: number }>(
@@ -30,7 +29,6 @@ const count = async (table: string) => {
       event_registrations: "select count(*)::int as n from event_registrations",
       digital_slots: "select count(*)::int as n from digital_slots",
       digital_bookings: "select count(*)::int as n from digital_bookings",
-      callback_requests: "select count(*)::int as n from callback_requests",
       podcast_participants: "select count(*)::int as n from podcast_participants",
       students: "select count(*)::int as n from students",
       problem_reports: "select count(*)::int as n from problem_reports",
@@ -105,12 +103,18 @@ describe("retention (daily clean-up)", () => {
     expect(left.map((b) => b.name)).toEqual(["B"]);
   });
 
-  test("call-back requests go after 30 days", async () => {
-    await createCallback(db, { name: "Old", phone: "0501111111", registered_by: null });
-    await createCallback(db, { name: "New", phone: "0502222222", registered_by: null });
-    await db.query(`update callback_requests set created_at = now() - interval '31 days' where name = 'Old'`);
+  test("people who left the podcast go after 30 days", async () => {
+    const left = (await podcast.joinPodcast(db, { name: "Old", email: null, phone: "0501111111", portal: "resident", topics: [], language: "he", availability: null, registered_by: null }))!;
+    await podcast.joinPodcast(db, { name: "New", email: null, phone: "0502222222", portal: "resident", topics: [], language: "he", availability: null, registered_by: null });
+    await podcast.withdraw(db, left.id);
+    await db.query(`update podcast_participants set withdrawn_at = now() - interval '31 days' where name = 'Old'`);
     await purgeOldData(db);
-    expect(await count("callback_requests")).toBe(1);
+    expect(await count("podcast_participants")).toBe(1);
+  });
+
+  test("the call-back requests table is gone (the feature was removed)", async () => {
+    const [row] = await db.query<{ gone: boolean }>(`select to_regclass('public.callback_requests') is null as gone`);
+    expect(row.gone).toBe(true);
   });
 });
 
@@ -122,21 +126,20 @@ describe("delete all data for a person", () => {
     const s = (await slot(daysAgo(-3)))!;
     await slots.bookSlot(db, s, { name: "Sara", phone, email: "sara@example.com", needs: [], needs_other: null, registered_by: null });
     await podcast.joinPodcast(db, { name: "Sara", email: null, phone, portal: "resident", topics: [], language: "he", availability: null, registered_by: null });
-    await createCallback(db, { name: "Sara", phone, registered_by: null });
     await upsertStudent(db, { name: "Sara", email: "sara@example.com", phone: null });
     await createProblemReport(db, { portal: "resident", name: "Sara", contact: phone, message: "help" });
 
     const result = await deletePersonData(db, phone, "SARA@example.com");
-    expect(result).toMatchObject({ event_registrations: 1, digital_bookings: 1, podcast_participants: 1, callback_requests: 1, students: 1, problem_reports: 1 });
+    expect(result).toMatchObject({ event_registrations: 1, digital_bookings: 1, podcast_participants: 1, students: 1, problem_reports: 1 });
     expect(await count("event_registrations")).toBe(1); // the other person's
     expect(await count("digital_bookings")).toBe(0);
     expect(await count("students")).toBe(0);
   });
 
   test("with neither phone nor email, nothing is deleted", async () => {
-    await createCallback(db, { name: "X", phone: "0501111111", registered_by: null });
+    await createProblemReport(db, { portal: "resident", name: "X", contact: "0501111111", message: "x" });
     expect(await deletePersonData(db, null, null)).toEqual({});
-    expect(await count("callback_requests")).toBe(1);
+    expect(await count("problem_reports")).toBe(1);
   });
 });
 

@@ -18,9 +18,11 @@
 
 ## כללי עיצוב לפורטל הדיירים (גוברים על כל כלל אחר ב-`/residents`)
 - עברית פשוטה וקצרה. בלי אנגלית, ז'רגון, קיצורים או אמוג'י שנושא משמעות לבד.
-- דף הבית: שם הפרויקט (בלי ברכה כמו "שלום, במה נוכל לעזור") ו-4 כפתורים גדולים מאוד (סמל + מילים, לפחות 72px):
-  "מה קורה השבוע?", "עזרה עם הטלפון או המחשב", "פודקאסט", "צרו איתי קשר". בלי תפריטים, בורר שפה או חלונות קופצים.
-- בכל עמוד: "חזרה לדף הראשי", "הגדל טקסט" (נשמר בדפדפן), "בקשו שאתקשר אליכם".
+- דף הבית: שם הפרויקט (בלי ברכה כמו "שלום, במה נוכל לעזור") ו-3 כפתורים גדולים מאוד (סמל + מילים, לפחות 72px):
+  "מה קורה השבוע?", "עזרה עם הטלפון או המחשב", "פודקאסט". בלי תפריטים, בורר שפה או חלונות קופצים.
+- בכל עמוד: הלוגואים (קישור לדף הראשי), "חזרה לדף הראשי", "הגדל טקסט" (נשמר בדפדפן).
+- אין "צרו קשר" (הוסר לבקשת הבעלים): מייל הארגון מופיע רק בהודעת הפרטיות (`contactEmail` ב-`config/brand.ts`).
+  "דיווח על בעיה" נשאר (בטיחות).
 - טקסט בסיס 22px ומעלה, כותרות 32px ומעלה, ריווח שורות 1.6, גופן Heebo, ניגודיות AAA, מטרות לחיצה 56px ומעלה.
 - טפסים כאשף: שאלה אחת בכל מסך, "הבא"/"חזרה", "שלב 2 מתוך 4", כפתורי בחירה גדולים במקום רשימות נפתחות,
   מסך סיכום וכפתור אחד "אני מאשר/ת ושולח/ת". אחרי השליחה: אישור רגוע וקוד בקשה בן 4 ספרות.
@@ -47,9 +49,9 @@ Vercel (אירוח ו-cron יומי). מקומית: PGlite במקום Supabase, 
 
 ## ישויות
 event_registrations (לפי UID של אירוע ביומן), podcast_times, digital_slots / digital_slot_series / digital_blocked_dates,
-digital_bookings (דיירים), digital_volunteers (תלמידים), students, podcast_participants/pairs, callback_requests,
+digital_bookings (דיירים), digital_volunteers (תלמידים), students, podcast_participants/pairs,
 problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tasks, outbound_messages, settings.
-הוסרו (מחוץ לתחום): שיעורים פרטיים, קורסים ומערכת שעות, בקשות ביקור, הצעות הרצאה, "זיכרון בסלון", הודעות באנר,
+הוסרו (מחוץ לתחום): "צרו קשר"/בקשות שיחה חוזרת, שיעורים פרטיים, קורסים ומערכת שעות, בקשות ביקור, הצעות הרצאה, "זיכרון בסלון", הודעות באנר,
 דף שיתוף/פוסטר, דף הרשמה מודפס.
 
 ## How to work on this project (for Claude)
@@ -65,7 +67,8 @@ problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tas
 | Schema, RLS, atomic SQL functions (booking, volunteering, pairing, retention) | `supabase/migrations/0001_init.sql`; `supabase/reset.sql` (one-time, old schema) |
 | Podcast times (data / admin section / resident wizard step / student form) | `lib/db/podcast.ts`, `app/(en)/admin/(protected)/podcast/`, `lib/wizard-steps.ts` (`podcastSteps`), `components/students/PodcastSignup.tsx`; `supabase/migrations/0002_podcast_times.sql` |
 | Digital support slots (data / admin page / resident wizard / student pages) | `lib/db/slots.ts`, `app/(en)/admin/(protected)/digital-support/`, `lib/wizard-steps.ts` (`helpSteps`), `app/(en)/students/{digital-support,mine}/` |
-| Brand name, legal texts | `config/brand.ts`, `legal/*.md` (rendered by `components/Markdown.tsx`), `LEGAL_TODO.md` |
+| Brand name, contact email (privacy page only), legal texts | `config/brand.ts`, `legal/*.md` (rendered by `components/Markdown.tsx`, `{{contact_email}}` filled in by `lib/legal.ts`), `LEGAL_TODO.md` |
+| Logos (sizes, alt text), favicon, share image, email header | `config/logos.ts`, `components/Logos.tsx`, `public/logos/` (originals in `assets/logos/`), `scripts/make-brand-images.mjs`, `lib/site-metadata.ts`, `lib/notify/html.ts` |
 | Security: CSP + admin guard, headers, logging, checks | `proxy.ts`, `next.config.ts`, `lib/log.ts`, `lib/admin-page.ts`, `scripts/check-*.mjs`, `SECURITY.md` |
 | Calendar: iCal parsing, tags/options, seed fallback, event health | `lib/calendar/` |
 | Text (no strings hard-coded in components) | `lib/i18n/en.ts` (students), `lib/i18n/he.ts` (residents); admin pages are English inline |
@@ -81,7 +84,8 @@ problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tas
   field must be added there) → `lib/domain.ts` / `lib/db/*` → a **new migration** → the form (resident: a wizard step
   in `lib/wizard-steps.ts`; student: `components/students/*`) → admin list + CSV export → tests (also add it to
   `tests/injection.test.ts`).
-- **Database changes:** `0001_init.sql` was rewritten once (scope change, no real data yet). From now on never edit it;
+- **Database changes:** `0001_init.sql` was rewritten twice (scope change; then the owner had call-back requests removed,
+  with `0003` doing the same on existing databases). From now on never edit it;
   add `supabase/migrations/000N_name.sql` (applied automatically to the local PGlite and tests). In the PR, tell the
   owner to paste it into Supabase → SQL Editor → Run **before merging**. New tables need `enable row level security`
   and the same revokes as the end of `0001_init.sql`; functions need `set search_path = public, pg_temp`

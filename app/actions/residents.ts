@@ -5,7 +5,7 @@ import { DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
 import { LANGUAGES } from "@/config/languages";
 import { eventForm, getCalendar, getEvent } from "@/lib/calendar";
 import * as eventsDb from "@/lib/db/events";
-import { clearCodeFailures, codeAttempt, createCallback, createProblemReport, isBlocked, lookupStatus } from "@/lib/db/misc";
+import { clearCodeFailures, codeAttempt, createProblemReport, lookupStatus } from "@/lib/db/misc";
 import * as podcastDb from "@/lib/db/podcast";
 import * as slotsDb from "@/lib/db/slots";
 import { bookDigital, cancelEventRegistration, joinPodcast, registerEvent } from "@/lib/domain";
@@ -140,20 +140,6 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
     }
     const time = r.data.time ? await podcastDb.getPodcastTime(db, r.data.time) : null;
     return { ok: true, code: res.code, data: time ? { slot: { ...time, slot_date: time.time_date } } : undefined };
-  });
-}
-
-// ---------------------------------------------------------------- call me back
-
-export async function requestCallback(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withDb("he", async (db) => {
-    const stop = await guardForm(db, fd, "residents:callback", "he");
-    if (stop) return stop;
-    const r = validate(form({ name: v.name, phone: v.phone() }), formObject(fd));
-    if (!r.ok) return invalid(r.errors, "he");
-    if (await isBlocked(db, r.data.phone, null)) return { ok: false, message: he.unavailable };
-    await createCallback(db, { ...r.data, registered_by: null });
-    return { ok: true };
   });
 }
 

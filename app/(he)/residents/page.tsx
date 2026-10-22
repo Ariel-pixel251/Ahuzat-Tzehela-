@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarIcon, CallIcon, MicIcon, PhoneIcon } from "@/components/icons";
+import { CalendarIcon, MicIcon, PhoneIcon } from "@/components/icons";
 import { Wordmark } from "@/components/Wordmark";
 import { residentsText as t } from "@/lib/i18n";
 
@@ -7,7 +7,6 @@ const buttons = [
   { href: "/residents/events", label: t.home.buttons.events, Icon: CalendarIcon },
   { href: "/residents/help", label: t.home.buttons.help, Icon: PhoneIcon },
   { href: "/residents/podcast", label: t.home.buttons.podcast, Icon: MicIcon },
-  { href: "/residents/callback", label: t.home.buttons.callback, Icon: CallIcon },
 ];
 
 export default function ResidentsHome() {

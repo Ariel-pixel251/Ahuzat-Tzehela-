@@ -48,10 +48,6 @@ const exports: Record<string, Export> = {
       people.map((p) => [p.name, p.portal, p.email, p.phone, p.topics, p.language, timeOf(p.time_id), p.availability, p.status, partner(p.id), p.active, p.code, p.registered_by, p.created_at]),
     ];
   },
-  callbacks: async (db) => [
-    ["name", "phone", "handled", "registered_by", "created_at"],
-    (await misc.listCallbacks(db)).map((r) => [r.name, r.phone, r.handled, r.registered_by, r.created_at]),
-  ],
   messages: async (db) => [
     ["to_name", "to_phone", "channel", "body", "status", "created_at"],
     (await misc.listMessages(db)).map((m) => [m.to_name, m.to_phone, m.channel, m.body, m.status, m.created_at]),

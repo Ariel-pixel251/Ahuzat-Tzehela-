@@ -612,18 +612,6 @@ begin
   return 'paired';
 end $$;
 
--- ---------------------------------------------------------------- call-back requests
-
-create table callback_requests (
-  id uuid primary key default gen_random_uuid(),
-  created_at timestamptz not null default now(),
-  name text not null check (char_length(name) between 1 and 100),
-  phone text not null check (char_length(phone) <= 20),
-  handled boolean not null default false,
-  handled_at timestamptz,
-  registered_by text check (char_length(registered_by) <= 200)
-);
-
 -- ---------------------------------------------------------------- leaders and tasks
 
 create table leaders (
@@ -667,9 +655,7 @@ begin
   delete from digital_volunteers where status = 'cancelled' and cancelled_at < now() - interval '30 days';
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('digital_volunteers_cancelled', n);
   delete from digital_slot_series where until_date < current_date - 90;
-  -- call-back requests and people who left the podcast: after 30 days
-  delete from callback_requests where created_at < now() - interval '30 days';
-  get diagnostics n = row_count; v_out := v_out || jsonb_build_object('callback_requests', n);
+  -- people who left the podcast: after 30 days
   delete from podcast_participants where not active and withdrawn_at < now() - interval '30 days';
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('podcast_withdrawn', n);
   -- manual message queue: sent after 30 days, unsent after 90
@@ -712,8 +698,6 @@ begin
      where p.phone = v_phone or lower(p.email) = v_email);
   delete from podcast_participants where phone = v_phone or lower(email) = v_email;
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('podcast_participants', n);
-  delete from callback_requests where phone = v_phone;
-  get diagnostics n = row_count; v_out := v_out || jsonb_build_object('callback_requests', n);
   delete from outbound_messages where to_phone = v_phone;
   get diagnostics n = row_count; v_out := v_out || jsonb_build_object('outbound_messages', n);
   delete from students where lower(email) = v_email or phone = v_phone;

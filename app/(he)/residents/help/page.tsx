@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { bookHelpSlot } from "@/app/actions/residents";
-import { CallIcon } from "@/components/icons";
-import { buttonClass, Notice } from "@/components/ui";
+import { Notice } from "@/components/ui";
 import { Wizard } from "@/components/Wizard";
 import { listUpcomingSlots } from "@/lib/db/slots";
 import { residentsText as t, sharedText } from "@/lib/i18n";
@@ -26,13 +24,7 @@ export default async function HelpPage() {
       ) : hasOpenSlot ? (
         <Wizard steps={helpSteps(slots)} action={bookHelpSlot} done={t.confirm.help} doneDetail="slot" />
       ) : (
-        <>
-          <p className="rounded-2xl border-4 border-ink p-5 text-2xl font-bold">{t.fields.noSlots}</p>
-          <Link href="/residents/callback" className={`${buttonClass.primary} mt-6 w-full min-h-[72px] text-2xl`}>
-            <CallIcon className="size-8" />
-            {t.callMe}
-          </Link>
-        </>
+        <p className="rounded-2xl border-4 border-ink p-5 text-2xl font-bold">{t.fields.noSlots}</p>
       )}
     </>
   );

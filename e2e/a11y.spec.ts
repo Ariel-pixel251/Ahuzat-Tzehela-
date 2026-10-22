@@ -6,7 +6,6 @@ const residentPages = [
   "/residents/events",
   "/residents/help",
   "/residents/podcast",
-  "/residents/callback",
   "/residents/status",
   "/residents/report",
   "/residents/privacy",

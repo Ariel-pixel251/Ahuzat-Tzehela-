@@ -64,6 +64,7 @@ With no environment values:
 | `ADMIN_EMAILS` | no | Comma-separated emails allowed into `/admin` (admins and leaders). |
 | `STUDENT_EMAIL_DOMAINS` | no | Recommended: only these email domains can sign in as students, e.g. `em-is.org`. |
 | `SITE_URL` | no | The site's public address, e.g. `https://beyachad-ledorot.vercel.app`. |
+| `NEXT_PUBLIC_SITE_URL` | no | The same address; the logos in emails and the share image are loaded from it (falls back to `SITE_URL`). |
 | `SMTP_USER` | no | **Email, easiest option (free, no domain):** a Gmail address. |
 | `SMTP_PASSWORD` | **yes** | That account's **app password**: Google Account → Security → 2-Step Verification (turn on) → App passwords. |
 | `SMTP_HOST`, `SMTP_PORT` | no | Only for non-Gmail mailboxes (port defaults to 465). |
@@ -181,9 +182,10 @@ If the feed can't be fetched, the site shows `data/events.seed.json` instead of 
 These rules win over anything else for `/residents`:
 
 - Hebrew only, right to left. Short, plain everyday words; no English, jargon, abbreviations or emoji-only meaning.
-- Home: the project's name, then 4 very large buttons (icon + words, at least 72px high): events, digital support,
-  podcast, contact me. No menus, language switcher or popups.
-- Every page: "חזרה לדף הראשי", "הגדל טקסט" (remembered in the browser) and "בקשו שאתקשר אליכם".
+- Home: the project's name, then 3 very large buttons (icon + words, at least 72px high): events, digital support,
+  podcast. No menus, language switcher or popups. There is no "contact us" feature; the organisation's email is
+  shown only in the privacy notice (`contactEmail` in `config/brand.ts`).
+- Every page: the logos (linking home), "חזרה לדף הראשי" and "הגדל טקסט" (remembered in the browser).
 - Base text 22px (27px with bigger text), headings 32px+, line height 1.6, Heebo font, WCAG AAA contrast, tap
   targets of at least 56px, a thick visible focus ring.
 - Forms are wizards: one question per screen, big "הבא"/"חזרה" buttons, "שלב 2 מתוך 4", big choice buttons instead
@@ -193,6 +195,18 @@ These rules win over anything else for `/residents`:
 - Dates in words ("יום שלישי, 3 בנובמבר, 16:00 עד 17:30"), never ISO dates.
 - No accounts or passwords. Checked automatically: axe on every resident page, no horizontal scroll at 360px and
   at 200% zoom, the full flows with Playwright, including keyboard only.
+
+## Logos
+
+The site shows three logos: **EMIS**, **Ahuzat Tzahala** (אחוזת צהלה) and the program's logo **ביחד לדורות** (Together
+for Generations). The originals are in `assets/logos/` (see its README); the site uses the copies in `public/logos/`.
+Sizes and alt text are in `config/logos.ts` (logos are never shown larger than half their file's height, so
+retina screens never get a scaled-up image). The browser-tab icons, the share image (`public/og.png`) and the small
+email copies are made from them with `node scripts/make-brand-images.mjs`.
+
+> **These logos belong to their owners** (EMIS – Eastern Mediterranean International School, Ahuzat Tzahala, and the
+> "ביחד לדורות" program) **and are used with the permission of these organizations.**
+> _To confirm by the project owner: [who gave permission, and when]._
 
 ## Project layout
 

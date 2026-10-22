@@ -40,7 +40,7 @@ where they conflict) and how it was implemented. The source notes are in `meetin
 - Admin sessions last 12 hours; student sessions 30 days.
 - The 4-digit code: the phone number is the second factor; 5 wrong codes lock that phone for 24 hours.
 - Retention: event registrations 90 days after the event, slots and bookings 90 days after the slot, cancelled
-  sign-ups and call-backs 30 days, problem reports 1 year, audit log 2 years.
+  sign-ups 30 days, problem reports 1 year, audit log 2 years.
 - Students who volunteer give an age group; under-18s also a parent or guardian's name, phone and okay.
 - Admins can make podcast pairs and add slot helpers with people who never signed up (typed in by staff), and
   can send them a "who and when" message (owner's request).

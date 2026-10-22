@@ -11,7 +11,6 @@ const TYPES = [
   { value: "event", label: "Event registration" },
   { value: "digital", label: "Digital support (book a slot)" },
   { value: "podcast", label: "Podcast sign-up" },
-  { value: "callback", label: "Call-back request" },
 ];
 
 const opts = (list: readonly { code: string; en: string }[]) => list.map((o) => ({ value: o.code, label: o.en }));
@@ -73,7 +72,7 @@ export function RegisterOnBehalf({
         )}
         <TextField name="name" label="Resident's name" required />
         <TextField name="phone" label="Phone" type="tel" required />
-        {type !== "callback" && <TextField name="email" label="Email (optional)" type="email" />}
+        <TextField name="email" label="Email (optional)" type="email" />
 
         {type === "event" && (
           <>

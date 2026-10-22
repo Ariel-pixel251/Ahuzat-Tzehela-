@@ -11,7 +11,6 @@ const nav = [
   ["/admin/events", "Events"],
   ["/admin/digital-support", "Digital support"],
   ["/admin/podcast", "Podcast"],
-  ["/admin/callbacks", "Callbacks"],
   ["/admin/messages", "Messages"],
   ["/admin/register", "Register a resident"],
   ["/admin/leaders", "Leaders"],

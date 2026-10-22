@@ -32,6 +32,12 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - Podcast times (owner's request, 2026-10-22, replacing the hour scroll wheels): the admin creates them on
   /admin → Podcast (once or weekly, with a number of pairs); residents and students choose one when they sign up,
   or "arrange by message". A pair who chose the same time meets then. Needs `0002_podcast_times.sql` run in Supabase.
+- Logos (owner's request, 2026-10-22): EMIS, Ahuzat Tzahala and "ביחד לדורות" on the landing page, in both portals'
+  header (linking home) and footer, in emails (from `NEXT_PUBLIC_SITE_URL`), the tab icon and the share image.
+  Sizes and alt text in `config/logos.ts`. Permission note in the README still to be confirmed by the owner.
+- "Contact us" removed (owner's request, 2026-10-22): no call-back button, page, table or admin list. Residents'
+  home has 3 buttons. The only contact is the organisation's email in the privacy notices (`contactEmail` in
+  `config/brand.ts`, still empty). Needs `0003_remove_callback_requests.sql` run in Supabase.
 
 ## Lessons from the first deploy
 
@@ -66,9 +72,14 @@ schema was rewritten, so the live database must be reset once (no real data yet)
 
 - [ ] **Before merging the scope-change PR:** Supabase → SQL Editor → run `supabase/reset.sql` (deletes the old
       tables), then run `supabase/migrations/0001_init.sql`. Then merge; `/admin/setup` should be all green.
-- [ ] Create the digital support slots in `/admin` → Digital support (weekly series + holiday dates).
+- [ ] In Supabase → SQL Editor, run `0002_podcast_times.sql` (before merging PR #20) and
+      `0003_remove_callback_requests.sql` (before merging the logos PR), each once; `/admin/setup` checks both.
+- [ ] Set `NEXT_PUBLIC_SITE_URL=https://beyachad-ledorot.vercel.app` in Vercel (email logos, share image).
+- [ ] Fill in `contactEmail` in `config/brand.ts`; confirm the logo permission note in the README.
+- [ ] Create the digital support slots in `/admin` → Digital support (weekly series + holiday dates), and the
+      podcast times in `/admin` → Podcast.
 - [ ] Turn on two-factor login on GitHub, Vercel, Supabase (and Resend if used).
-- [ ] Fill in the organisation name and contact email in `legal/` and work through `LEGAL_TODO.md`; get the
+- [ ] Fill in the organisation name in `legal/` and work through `LEGAL_TODO.md`; get the
       school's okay before real users sign up.
 - [ ] Set `STUDENT_EMAIL_DOMAINS=em-is.org` in Vercel (only school emails can sign in as students).
 - [ ] Email: `SMTP_USER` / `SMTP_PASSWORD` (Gmail app password) in Vercel and the same in Supabase's custom SMTP.
