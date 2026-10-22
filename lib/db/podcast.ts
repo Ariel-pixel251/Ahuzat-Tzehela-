@@ -13,6 +13,8 @@ export type ParticipantInput = {
   language: string;
   availability: string | null;
   registered_by: string | null;
+  /** one of the team's podcast times; null: arrange by message */
+  time_id?: string | null;
 };
 
 export type Participant = ParticipantInput & {
@@ -25,33 +27,106 @@ export type Participant = ParticipantInput & {
 };
 
 /** Public view for the "looking for a partner" list: first name only, no contact details. */
-export type PublicParticipant = Pick<Participant, "id" | "portal" | "topics" | "language" | "availability" | "status"> & {
+export type PublicParticipant = Pick<Participant, "id" | "portal" | "topics" | "language" | "availability" | "status" | "time_id"> & {
   first_name: string;
 };
 
-/** Returns null when this email or phone has already signed up. */
-export async function joinPodcast(db: Db, input: ParticipantInput) {
+export type JoinPodcastResult =
+  | { status: "joined"; id: string; code: string; token: string | null }
+  | { status: "duplicate" | "full" | "closed" | "not_found" };
+
+/**
+ * Sign up, optionally at one of the team's podcast times (`time_id`). The database checks the time
+ * atomically: "full" once as many people from this portal as pairs chose it, "closed" when the team
+ * closed it or it has started. "duplicate": this email or phone already signed up.
+ * `staff`: the team adding someone may use a closed or full time.
+ */
+export async function joinPodcastAt(db: Db, input: ParticipantInput, { staff = false } = {}): Promise<JoinPodcastResult> {
   const code = newCode();
   const token = input.email ? newToken() : null;
-  const rows = await db.query<{ id: string }>(
-    `insert into podcast_participants
-       (name, email, phone, portal, topics, language, availability, registered_by, code, manage_token_hash)
-     values ($1, $2, $3, $4, text_array($5::text::jsonb), $6, $7, $8, $9, $10)
-     on conflict do nothing returning id`,
-    [
-      input.name,
-      input.email,
-      input.phone,
-      input.portal,
-      JSON.stringify(input.topics),
-      input.language,
-      input.availability,
-      input.registered_by,
-      code,
-      token?.hash ?? null,
-    ],
+  const person = {
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    portal: input.portal,
+    topics: input.topics,
+    language: input.language,
+    availability: input.availability,
+    registered_by: input.registered_by,
+    code,
+    manage_token_hash: token?.hash ?? null,
+  };
+  const [row] = await db.query<{ r_id: string | null; r_status: "joined" | "duplicate" | "full" | "closed" | "not_found" }>(
+    `select r_id, r_status from podcast_join($1::text::jsonb, $2::uuid, $3)`,
+    [JSON.stringify(person), input.time_id ?? null, staff],
   );
-  return rows[0] ? { id: rows[0].id, code, token: token?.raw ?? null } : null;
+  if (row.r_status !== "joined" || !row.r_id) return { status: row.r_status === "joined" ? "duplicate" : row.r_status };
+  return { status: "joined", id: row.r_id, code, token: token?.raw ?? null };
+}
+
+/** Returns null when this email or phone has already signed up (or the time can't be used). */
+export async function joinPodcast(db: Db, input: ParticipantInput) {
+  const res = await joinPodcastAt(db, input, { staff: true });
+  return res.status === "joined" ? { id: res.id, code: res.code, token: res.token } : null;
+}
+
+// ---------------------------------------------------------------- podcast times (set by the team)
+
+export type PodcastTime = {
+  id: string;
+  time_date: string;
+  start_time: string;
+  end_time: string;
+  place_he: string;
+  place_en: string | null;
+  pairs: number;
+  open: boolean;
+  starts_at: Date;
+  residents: number;
+  students: number;
+};
+
+export type PodcastTimeInput = Pick<PodcastTime, "time_date" | "start_time" | "end_time" | "place_he" | "place_en" | "pairs">;
+
+/** Times that haven't started yet (all of them, open or not), soonest first. */
+export const listUpcomingTimes = (db: Db) =>
+  db.query<PodcastTime>(`select * from podcast_time_overview where starts_at > now() order by starts_at`);
+
+export const listAllTimes = (db: Db) => db.query<PodcastTime>(`select * from podcast_time_overview order by starts_at desc`);
+
+export async function getPodcastTime(db: Db, id: string) {
+  const [row] = await db.query<PodcastTime>(`select * from podcast_time_overview where id = $1`, [id]);
+  return row ?? null;
+}
+
+/** Places left for this portal at a time. */
+export const placesLeft = (t: PodcastTime, portal: Portal) => Math.max(0, t.pairs - (portal === "resident" ? t.residents : t.students));
+
+/** Creates one time, or one every week from the date until `repeatUntil`. Returns how many. */
+export async function createPodcastTimes(db: Db, input: PodcastTimeInput, repeatUntil: string | null) {
+  const rows = await db.query<{ id: string }>(
+    `insert into podcast_times (time_date, start_time, end_time, place_he, place_en, pairs)
+     select d::date, $3, $4, $5, $6, $7
+       from generate_series($1::date, greatest($1::date, coalesce($2::date, $1::date)), interval '7 days') d
+     returning id`,
+    [input.time_date, repeatUntil, input.start_time, input.end_time, input.place_he, input.place_en, input.pairs],
+  );
+  return rows.length;
+}
+
+export const setPodcastTimeOpen = (db: Db, id: string, open: boolean) =>
+  db.query(`update podcast_times set open = $2 where id = $1`, [id, open]);
+
+/** Deletes a time; people who chose it stay signed up, without a time (the team arranges it). */
+export const deletePodcastTime = (db: Db, id: string) => db.query(`delete from podcast_times where id = $1`, [id]);
+
+/** When and where a pair meets, if set. */
+export async function getPairMeeting(db: Db, pairId: string): Promise<Meeting | null> {
+  const [row] = await db.query<{ date: string | null; time: string | null; place: string | null }>(
+    `select to_char(meeting_date, 'YYYY-MM-DD') as date, meeting_time as time, meeting_place as place from podcast_pairs where id = $1`,
+    [pairId],
+  );
+  return row?.date ? { date: row.date, time: row.time, place: row.place } : null;
 }
 
 export async function getParticipant(db: Db, id: string) {
@@ -64,14 +139,13 @@ export async function getParticipantByToken(db: Db, rawToken: string) {
   return row ?? null;
 }
 
-/** Active people not yet in a pair (status looking or requested). */
 /**
  * Students on the "looking for a partner" list (first names and interests only). Residents are not
  * listed publicly: the team pairs them.
  */
 export const listLooking = (db: Db) =>
   db.query<PublicParticipant>(
-    `select id, first_name, portal, topics, language, availability, status
+    `select id, first_name, portal, topics, language, availability, status, time_id
        from podcast_people where active and pair_id is null and portal = 'student' order by created_at`,
   );
 

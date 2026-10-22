@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import { parseIcs, type CalendarEvent } from "@/lib/calendar/parse";
+import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
 import type { Db } from "@/lib/db/types";
 import { testDb } from "./helpers/db";
@@ -70,6 +71,7 @@ async function tableCount() {
 }
 
 let slotId: string;
+let podcastTimeId: string;
 let tables: number;
 
 beforeAll(async () => {
@@ -101,6 +103,12 @@ beforeAll(async () => {
     booking_open: true,
     closes_hours_before: null,
   }))!;
+  await podcast.createPodcastTimes(
+    db,
+    { time_date: new Date(Date.now() + 6 * 86_400_000).toISOString().slice(0, 10), start_time: "16:00", end_time: "17:00", place_he: "בספרייה", place_en: null, pairs: 50 },
+    null,
+  );
+  podcastTimeId = (await podcast.listUpcomingTimes(db))[0].id;
   // someone else's booking, which no payload may reveal
   await slots.bookSlot(db, slotId, { name: "Secret Person", phone: "0529998877", email: "secret@example.com", needs: ["phone"], needs_other: null, registered_by: null });
   tables = await tableCount();
@@ -122,7 +130,7 @@ const FORMS: { name: string; action: Action; valid: () => Record<string, string 
   {
     name: "resident: podcast",
     action: residents.joinPodcastAsResident,
-    valid: () => ({ topics: ["history"], language: "he", days: ["sun"], hours: "10:00-12:00", name: "Rivka", phone: `053${String(1000000 + ip).slice(-7)}`, email: "" }),
+    valid: () => ({ topics: ["history"], language: "he", time: podcastTimeId, name: "Rivka", phone: `053${String(1000000 + ip).slice(-7)}`, email: "" }),
   },
   { name: "resident: call me back", action: residents.requestCallback, valid: () => ({ name: "Moshe", phone: "0541234567" }) },
   { name: "resident: report a problem", action: residents.reportProblemAsResident, valid: () => ({ message: "Something happened", name: "", phone: "" }) },
@@ -148,7 +156,7 @@ const FORMS: { name: string; action: Action; valid: () => Record<string, string 
   {
     name: "student: podcast",
     action: students.joinPodcastAsStudent,
-    valid: () => ({ name: "Dana", email: `p${ip}@emis.test`, phone: "", topics: ["music"], language: "en", availability: "", consent: "on" }),
+    valid: () => ({ name: "Dana", email: `p${ip}@emis.test`, phone: "", topics: ["music"], language: "en", time: podcastTimeId, consent: "on" }),
   },
   { name: "student: sign-in link", action: students.requestSignInLink, valid: () => ({ name: "Dana", email: `s${ip}@emis.test`, phone: "", consent: "on" }) },
   { name: "student: report a problem", action: students.reportProblemAsStudent, valid: () => ({ message: "Help", name: "", contact: "", consent: "on" }) },

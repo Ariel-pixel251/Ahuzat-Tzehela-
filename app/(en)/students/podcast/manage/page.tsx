@@ -3,7 +3,8 @@ import { answerPairRequest, askToPair, leavePodcast } from "@/app/actions/studen
 import { ActionButton } from "@/components/ActionButton";
 import { PodcastPeople } from "@/components/students/PodcastPeople";
 import { Badge, Card, Notice, PageTitle } from "@/components/ui";
-import { getParticipantByToken, getPartner, listLooking, listPendingRequests } from "@/lib/db/podcast";
+import { getParticipantByToken, getPartner, listAllTimes, listLooking, listPendingRequests } from "@/lib/db/podcast";
+import { formatPodcastTime } from "@/lib/i18n/format";
 import { studentsText as t } from "@/lib/i18n";
 import { formatPhone } from "@/lib/phone";
 import { tryDb } from "@/lib/server";
@@ -19,7 +20,8 @@ export default async function PodcastManage({ searchParams }: { searchParams: Pr
   const me = db && parsed.success ? await getParticipantByToken(db, parsed.data) : null;
   if (!db || !me || !me.active || !parsed.success) return <Notice kind="bad">{t.podcast.invalid}</Notice>;
   const token = parsed.data;
-  const [partner, requests, looking] = await Promise.all([getPartner(db, me.id), listPendingRequests(db, me.id), listLooking(db)]);
+  const [partner, requests, looking, times] = await Promise.all([getPartner(db, me.id), listPendingRequests(db, me.id), listLooking(db), listAllTimes(db)]);
+  const labels = Object.fromEntries(times.map((x) => [x.id, formatPodcastTime(x, "en")]));
   const others = looking.filter((p) => p.id !== me.id);
   const outgoing = new Set(requests.filter((r) => r.direction === "out").map((r) => r.other_id));
   return (
@@ -30,6 +32,7 @@ export default async function PodcastManage({ searchParams }: { searchParams: Pr
           <span className="font-bold">{t.podcast.you}: {me.name}</span>
           <Badge tone={me.status === "paired" ? "ok" : "neutral"}>{t.podcast.statuses[me.status]}</Badge>
         </p>
+        {me.time_id && labels[me.time_id] && <p className="mt-2">{t.podcast.yourTime}: {labels[me.time_id]}</p>}
         {partner ? (
           <div className="mt-3">
             <h2 className="text-xl font-extrabold">{t.podcast.partner}: {partner.name}</h2>
@@ -62,6 +65,7 @@ export default async function PodcastManage({ searchParams }: { searchParams: Pr
           <h2 id="looking" className="mb-4 text-2xl font-extrabold">{t.podcast.lookingTitle}</h2>
           <PodcastPeople
             people={others}
+            times={labels}
             action={(p) =>
               outgoing.has(p.id) ? (
                 <p className="mt-2 font-bold">{t.podcast.outgoing}</p>

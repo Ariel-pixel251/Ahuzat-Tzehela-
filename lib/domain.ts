@@ -6,7 +6,7 @@ import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
 import { getStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
-import { formatDateTime, formatEventWhen, formatSlot } from "@/lib/i18n/format";
+import { formatDateTime, formatEventWhen, formatPodcastTime, formatSlot } from "@/lib/i18n/format";
 import type { Locale } from "@/lib/i18n";
 import { notify, type Recipient } from "@/lib/notify";
 import { templates } from "@/lib/notify/templates";
@@ -305,17 +305,23 @@ export async function sendSlotReminders(db: Db) {
 
 // ---------------------------------------------------------------- podcast
 
-export async function joinPodcast(db: Db, input: podcast.ParticipantInput, baseUrl: string) {
+/**
+ * Sign up for the podcast, optionally at one of the team's times. Returns "blocked", or the
+ * database's answer ("joined" with the request code, or why not: "duplicate" | "full" | "closed" | "not_found").
+ */
+export async function joinPodcast(db: Db, input: podcast.ParticipantInput, baseUrl: string, { staff = false } = {}) {
   if (await misc.isBlocked(db, input.phone, input.email)) return "blocked" as const;
-  const res = await podcast.joinPodcast(db, input);
-  if (!res) return null;
+  const res = await podcast.joinPodcastAt(db, input, { staff });
+  if (res.status !== "joined") return res;
   const locale = localeOf(input.portal);
+  const time = input.time_id ? await podcast.getPodcastTime(db, input.time_id) : null;
   await notify(
     db,
     input,
     templates.podcastJoined(locale, {
       name: firstName(input.name),
       code: res.code,
+      when: time ? formatPodcastTime(time, locale) : null,
       // students pair themselves on their podcast page; residents are paired by the team
       manageUrl: input.portal === "student" && res.token ? `${baseUrl}/students/podcast/manage?token=${res.token}` : null,
     }),
@@ -351,6 +357,8 @@ export async function adminPairPodcast(db: Db, a: string, b: string, { meeting =
   const pairId = await podcast.makePair(db, a, b, "admin");
   if (!pairId) return null;
   if (meeting) await podcast.setPairMeeting(db, pairId, meeting);
+  // no meeting typed in: the time both chose (set by the database when pairing), if any
+  else meeting = await podcast.getPairMeeting(db, pairId);
   if (send) {
     const [pa, pb] = await Promise.all([podcast.getParticipant(db, a), podcast.getParticipant(db, b)]);
     if (pa && pb) {

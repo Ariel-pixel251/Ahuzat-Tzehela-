@@ -135,15 +135,23 @@ export const templates = {
 
   // ---------------------------------------------------------------- podcast
 
-  podcastJoined(locale: Locale, p: { name: string; code: string; manageUrl?: string | null }): Message {
+  podcastJoined(locale: Locale, p: { name: string; code: string; when?: string | null; manageUrl?: string | null }): Message {
+    const when = p.when ? clean(p.when) : null;
     return locale === "he"
       ? {
           subject: "נרשמתם לפודקאסט",
-          body: `שלום ${clean(p.name, 100)},\nתודה שנרשמתם לפודקאסט! נחפש לכם שותף.\nקוד הבקשה: ${clean(p.code, 4)}` + sign.he,
+          body:
+            `שלום ${clean(p.name, 100)},\nתודה שנרשמתם לפודקאסט! נחפש לכם שותף.` +
+            (when ? `\nהמועד שבחרתם: ${when}.` : "") +
+            `\nקוד הבקשה: ${clean(p.code, 4)}` +
+            sign.he,
         }
       : {
           subject: "Your podcast page",
-          body: `Hi ${clean(p.name, 100)},\n\nThanks for joining the podcast project! Your private page (keep this link to yourself):\n${p.manageUrl ?? ""}\n\nThere you can ask someone to pair with you and answer requests.${sign.en}`,
+          body:
+            `Hi ${clean(p.name, 100)},\n\nThanks for joining the podcast project!` +
+            (when ? ` Your time: ${when}.` : "") +
+            ` Your private page (keep this link to yourself):\n${p.manageUrl ?? ""}\n\nThere you can ask someone to pair with you and answer requests.${sign.en}`,
         };
   },
 

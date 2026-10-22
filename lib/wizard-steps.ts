@@ -1,10 +1,11 @@
 import { LANGUAGES } from "@/config/languages";
-import { DAYS, DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
+import { ARRANGE_BY_MESSAGE, DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
 import type { WizardStep } from "@/components/Wizard";
 import { eventForm, type CalendarEvent } from "@/lib/calendar/parse";
+import { placesLeft, type PodcastTime } from "@/lib/db/podcast";
 import { freePlaces, type Slot } from "@/lib/db/slots";
 import { residentsText, sharedText } from "@/lib/i18n";
-import { formatSlot } from "@/lib/i18n/format";
+import { formatPodcastTime, formatSlot } from "@/lib/i18n/format";
 
 // The questions of each resident wizard, in order. One question per screen.
 
@@ -32,17 +33,6 @@ const languageStep = (title: string, name = "language"): WizardStep => ({
   title,
   fields: [{ kind: "choice", name, options: languageOptions, defaultValue: "he", columns: 2 }],
 });
-
-// one question per screen: first the days, then the hours
-const whenSteps: WizardStep[] = [
-  { id: "days", title: f.days, fields: [{ kind: "multi", name: "days", options: opts(DAYS), columns: 2, optional: true }] },
-  {
-    id: "hours",
-    title: f.hours,
-    hint: f.hoursHint,
-    fields: [{ kind: "timerange", name: "hours" }],
-  },
-];
 
 export function eventSteps(event: CalendarEvent): WizardStep[] {
   const form = eventForm(event);
@@ -117,12 +107,33 @@ export function helpSteps(slots: Slot[]): WizardStep[] {
   ];
 }
 
-export const podcastSteps: WizardStep[] = [
-  { id: "topics", title: f.topics, hint: f.topicsHint, fields: [{ kind: "multi", name: "topics", options: opts(PODCAST_TOPICS) }] },
-  languageStep(f.language),
-  ...whenSteps,
-  contactStep(),
-];
+/** The team's podcast times as big buttons (full ones can't be chosen), then "send me a message". */
+export function podcastTimeOptions(times: PodcastTime[], now = new Date()) {
+  return [
+    ...times
+      .filter((t) => t.open && t.starts_at > now)
+      .map((t) => {
+        const free = placesLeft(t, "resident");
+        return {
+          value: t.id,
+          label: formatPodcastTime(t, "he"),
+          detail: free ? f.placesLeft(free) : f.slotFull,
+          disabled: free === 0,
+        };
+      }),
+    { value: ARRANGE_BY_MESSAGE, label: f.arrangeByMessage },
+  ];
+}
+
+/** Join the podcast: topics, language, one of the team's times, then name and phone. */
+export function podcastSteps(times: PodcastTime[]): WizardStep[] {
+  return [
+    { id: "topics", title: f.topics, hint: f.topicsHint, fields: [{ kind: "multi", name: "topics", options: opts(PODCAST_TOPICS) }] },
+    languageStep(f.language),
+    { id: "time", title: f.podcastTime, hint: f.slotHint, fields: [{ kind: "choice", name: "time", options: podcastTimeOptions(times) }] },
+    contactStep(),
+  ];
+}
 
 export const callbackSteps: WizardStep[] = [contactStep({ email: false })];
 

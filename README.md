@@ -20,8 +20,9 @@ Gmail (SMTP) or Resend for email · Vercel (hosting and daily cron) · Google Ca
    before. **Language night** asks for the languages people speak; **game night** offers "play with someone who
    speaks my language". Registrations keep a snapshot of the event (by iCal UID), so they survive calendar edits;
    cancelled or moved events are flagged for admins, and one click notifies everyone.
-2. **Podcast pairs**: sign up, a "looking for a partner" list, request → accept, or admins pair people. One pair
-   per person. Admins can also pair people who never signed up (typed in on the form), set when and where they
+2. **Podcast pairs**: admins create podcast times (once or weekly, with a number of pairs), like digital support
+   slots; people choose one when they sign up (or "arrange by message"). A "looking for a partner" list,
+   request → accept, or admins pair people; a pair who chose the same time meets then. One pair per person. Admins can also pair people who never signed up (typed in on the form), set when and where they
    first meet, and send both a message with their partner and the time.
 3. **Digital support** as admin-set time slots: admins create slots (one-off or weekly, with blocked dates for
    holidays), residents book a place in a 4-step wizard, students volunteer as helpers. No overbooking (the database
@@ -186,7 +187,7 @@ These rules win over anything else for `/residents`:
 - Base text 22px (27px with bigger text), headings 32px+, line height 1.6, Heebo font, WCAG AAA contrast, tap
   targets of at least 56px, a thick visible focus ring.
 - Forms are wizards: one question per screen, big "הבא"/"חזרה" buttons, "שלב 2 מתוך 4", big choice buttons instead
-  of dropdowns (exception at the owner's request: hour scroll wheels in the podcast form), a review screen, and one
+  of dropdowns, a review screen, and one
   final button "אני מאשר/ת ושולח/ת" with one privacy sentence. Then a calm confirmation with a 4-digit request code.
 - Only name, phone and the choice; email is optional. Friendly error messages. Nothing times out.
 - Dates in words ("יום שלישי, 3 בנובמבר, 16:00 עד 17:30"), never ISO dates.

@@ -127,6 +127,54 @@ export async function sendCancellationNotice(_: ActionState, fd: FormData): Prom
   });
 }
 
+// ---------------------------------------------------------------- podcast times
+
+export async function createPodcastTimeAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return asAdmin(async (db, admin) => {
+    const schema = form({
+      time_date: v.date,
+      start_time: v.time,
+      end_time: v.time,
+      place_he: v.text(200),
+      place_en: v.optionalText(200),
+      pairs: v.int(1, 50),
+      repeat: v.checkbox,
+      until: v.optionalDate,
+    })
+      .refine(endAfterStart, { message: "text", path: ["end_time"] })
+      .refine((d) => !d.repeat || (d.until !== null && d.until >= d.time_date), { message: "text", path: ["until"] })
+      // at most a year of weekly times in one go
+      .refine((d) => !d.repeat || !d.until || Date.parse(d.until) - Date.parse(d.time_date) <= 366 * 86_400_000, { message: "text", path: ["until"] });
+    const r = validate(schema, formObject(fd));
+    if (!r.ok) return fail(r.errors);
+    const { repeat, until, ...input } = r.data;
+    const created = await podcastDb.createPodcastTimes(db, input, repeat ? until : null);
+    await misc.audit(db, admin.email, "podcast_time.create", null, { created, from: input.time_date, until: repeat ? until : null });
+    return done(created === 1 ? "Podcast time created." : `Created ${created} weekly podcast times.`);
+  });
+}
+
+export async function setPodcastTimeOpenAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return asAdmin(async (db, admin) => {
+    const id = idOf(fd);
+    if (!id) return badId;
+    const open = fd.get("open") === "yes";
+    await podcastDb.setPodcastTimeOpen(db, id, open);
+    await misc.audit(db, admin.email, open ? "podcast_time.open" : "podcast_time.close", id);
+    return done(open ? "Open: people can choose it." : "Closed: nobody new can choose it.");
+  });
+}
+
+export async function deletePodcastTimeAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return asAdmin(async (db, admin) => {
+    const id = idOf(fd);
+    if (!id) return badId;
+    await podcastDb.deletePodcastTime(db, id);
+    await misc.audit(db, admin.email, "podcast_time.delete", id);
+    return done("Deleted. Anyone who chose it is still signed up, without a time.");
+  });
+}
+
 // ---------------------------------------------------------------- digital support slots
 
 const slotFields = {
@@ -604,16 +652,17 @@ export async function registerOnBehalf(_: ActionState, fd: FormData): Promise<Ac
 
     if (type === "podcast") {
       const r = validate(
-        form({ ...common, email: v.optionalEmail, topics: v.codes(PODCAST_TOPICS, { min: 1 }), language: v.language, availability: v.optionalText(300) }),
+        form({ ...common, email: v.optionalEmail, topics: v.codes(PODCAST_TOPICS, { min: 1 }), language: v.language, time: v.podcastTime }),
         formObject(fd, ["topics"]),
       );
       if (!r.ok) return fail(r.errors);
       const d = r.data;
-      const person = { name: d.name, phone: d.phone, email: d.email, topics: d.topics, language: d.language, availability: d.availability };
-      const res = await joinPodcast(db, { ...person, portal: "resident", registered_by: staffOf(d.staff) }, base);
-      await misc.audit(db, admin.email, "on_behalf.podcast", null, { ok: Boolean(res && res !== "blocked") });
+      const person = { name: d.name, phone: d.phone, email: d.email, topics: d.topics, language: d.language, availability: null, time_id: d.time };
+      const res = await joinPodcast(db, { ...person, portal: "resident", registered_by: staffOf(d.staff) }, base, { staff: true });
+      await misc.audit(db, admin.email, "on_behalf.podcast", null, { status: res === "blocked" ? res : res.status });
       if (res === "blocked") return { ok: false, message: "This person is blocked." };
-      if (!res) return { ok: false, message: "This phone or email is already signed up for the podcast." };
+      if (res.status === "duplicate") return { ok: false, message: "This phone or email is already signed up for the podcast." };
+      if (res.status !== "joined") return { ok: false, message: "That podcast time is gone (deleted or already started). Choose another." };
       return { ok: true, message: `Signed up. Request code: ${res.code}`, code: res.code };
     }
 

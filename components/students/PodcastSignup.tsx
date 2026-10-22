@@ -5,10 +5,11 @@ import { joinPodcastAsStudent } from "@/app/actions/students";
 import { ActionForm, Checkbox, MultiSelect, SelectField, TextField } from "@/components/forms";
 import { ButtonLink, Notice } from "@/components/ui";
 import { LANGUAGES } from "@/config/languages";
-import { PODCAST_TOPICS } from "@/config/options";
+import { ARRANGE_BY_MESSAGE, PODCAST_TOPICS } from "@/config/options";
 import { studentsText as t } from "@/lib/i18n";
 
-export function PodcastSignup() {
+/** `times`: the team's open podcast times (id and label) that still have places for students. */
+export function PodcastSignup({ times }: { times: { value: string; label: string }[] }) {
   const f = t.form;
   return (
     <ActionForm
@@ -38,7 +39,13 @@ export function PodcastSignup() {
         summary={f.selected}
       />
       <SelectField name="language" label={t.podcast.language} defaultValue="en" options={LANGUAGES.map((l) => ({ value: l.code, label: l.en }))} />
-      <TextField name="availability" label={t.podcast.availability} hint={t.podcast.availabilityHint} />
+      <SelectField
+        name="time"
+        label={t.podcast.time}
+        hint={t.podcast.timeHint}
+        defaultValue={times[0]?.value ?? ARRANGE_BY_MESSAGE}
+        options={[...times, { value: ARRANGE_BY_MESSAGE, label: t.podcast.arrangeByMessage }]}
+      />
       <Checkbox
         name="consent"
         required

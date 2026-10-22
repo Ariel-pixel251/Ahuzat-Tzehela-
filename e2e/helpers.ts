@@ -43,6 +43,21 @@ export async function createSlot(
   await expect(form.getByRole("status")).toContainText(s.until ? "weekly slots" : "Slot created");
 }
 
+/** Creates a podcast time on /admin/podcast; the admin must be signed in. */
+export async function createPodcastTime(page: Page, t: { date: string; start?: string; end?: string; place: string; placeEn?: string; pairs?: number }) {
+  await page.goto("/admin/podcast");
+  const section = page.getByRole("region", { name: "Podcast times" });
+  await section.getByText("Add a podcast time").click();
+  await section.getByLabel("Date (first date)").fill(t.date);
+  await section.getByLabel("From").fill(t.start ?? "16:00");
+  await section.getByLabel("Until", { exact: true }).fill(t.end ?? "17:30");
+  await section.getByLabel("Place, as residents read it (Hebrew)").fill(t.place);
+  if (t.placeEn) await section.getByLabel("Place (English, optional)").fill(t.placeEn);
+  await section.getByLabel("Pairs").fill(String(t.pairs ?? 1));
+  await section.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(section.getByRole("status")).toContainText("Podcast time created");
+}
+
 /** Signs a student in with the on-screen link (email isn't set up locally). */
 export async function studentSignIn(page: Page, name: string, email: string) {
   await page.goto("/students/sign-in");

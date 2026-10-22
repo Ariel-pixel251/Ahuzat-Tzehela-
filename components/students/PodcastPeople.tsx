@@ -6,7 +6,16 @@ import type { PublicParticipant } from "@/lib/db/podcast";
 import { studentsText as t } from "@/lib/i18n";
 
 /** The "looking for a partner" list: first names and interests only, never contact details. */
-export function PodcastPeople({ people, action }: { people: PublicParticipant[]; action?: (p: PublicParticipant) => React.ReactNode }) {
+export function PodcastPeople({
+  people,
+  times = {},
+  action,
+}: {
+  people: PublicParticipant[];
+  /** labels of the podcast times, by id */
+  times?: Record<string, string>;
+  action?: (p: PublicParticipant) => React.ReactNode;
+}) {
   if (!people.length) return <p>{t.podcast.lookingNone}</p>;
   return (
     <ul className="grid gap-3 sm:grid-cols-2">
@@ -20,7 +29,7 @@ export function PodcastPeople({ people, action }: { people: PublicParticipant[];
           <p className="mt-1">{p.topics.map((c) => optionLabel(PODCAST_TOPICS, c, "en")).join(", ")}</p>
           <p className="text-muted">
             {languageName(p.language, "en")}
-            {p.availability ? ` · ${splitTitle(p.availability).en}` : ""}
+            {p.time_id && times[p.time_id] ? ` · ${times[p.time_id]}` : p.availability ? ` · ${splitTitle(p.availability).en}` : ""}
           </p>
           {action?.(p)}
         </li>

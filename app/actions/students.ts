@@ -87,7 +87,7 @@ export async function joinPodcastAsStudent(_: ActionState, fd: FormData): Promis
       phone: v.optionalPhone(intl),
       topics: v.codes(PODCAST_TOPICS, { min: 1 }),
       language: v.language,
-      availability: v.optionalText(300),
+      time: v.podcastTime,
       consent: v.consent,
     });
     const r = validate(schema, formObject(fd, ["topics"]));
@@ -97,10 +97,14 @@ export async function joinPodcastAsStudent(_: ActionState, fd: FormData): Promis
       return { ok: false, errors: { email: t.signIn.schoolEmailOnly(domains.map((x) => `@${x}`).join(", ")) } };
     }
     const d = r.data;
-    const input = { name: d.name, email: d.email, phone: d.phone, topics: d.topics, language: d.language, availability: d.availability };
+    const input = { name: d.name, email: d.email, phone: d.phone, topics: d.topics, language: d.language, availability: null, time_id: d.time };
     const res = await joinPodcast(db, { ...input, portal: "student", registered_by: null }, await getBaseUrl());
     if (res === "blocked") return { ok: false, message: en.unavailable };
-    if (!res) return { ok: false, message: en.alreadyJoined };
+    if (res.status === "duplicate") return { ok: false, message: en.alreadyJoined };
+    if (res.status !== "joined") {
+      const message = res.status === "full" ? en.slotFull : en.slotClosed;
+      return { ok: false, message, errors: { time: message } };
+    }
     revalidatePath("/students/podcast");
     // the private link goes only to the inbox (owning the email is the proof); on screen only in local development
     return { ok: true, data: process.env.NODE_ENV !== "production" ? { devLink: `/students/podcast/manage?token=${res.token}` } : undefined };

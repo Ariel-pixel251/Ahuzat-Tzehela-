@@ -41,11 +41,11 @@ for (const path of studentPages) {
   });
 }
 
-test("the time wheels (podcast) pass axe", async ({ page }) => {
+test("the podcast time question passes axe (AAA)", async ({ page }) => {
   await page.goto("/residents/podcast");
   await page.getByRole("button", { name: "סיפורי חיים" }).click();
-  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "הבא", exact: true }).click();
-  await expect(page.getByRole("spinbutton", { name: "משעה" })).toBeVisible();
+  for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "הבא", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "מתי נוח לכם להיפגש?" })).toBeVisible();
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag2aaa"]).analyze();
   expect(results.violations.map((v) => v.id)).toEqual([]);
 });
