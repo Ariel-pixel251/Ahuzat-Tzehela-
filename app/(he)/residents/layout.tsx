@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogoBar } from "@/components/Logos";
+import { BrandStripe, LogoBar } from "@/components/Logos";
 import { BackHome } from "@/components/residents/BackHome";
 import { TextSizeToggle } from "@/components/TextSizeToggle";
 import { residentsText as t } from "@/lib/i18n";
@@ -9,7 +9,8 @@ export default function ResidentsLayout({ children }: { children: React.ReactNod
   return (
     <>
       <header className="border-b-2 border-line">
-        <LogoBar place="header" locale="he" href="/residents" label={t.logosHome} priority className="px-4 pt-3 text-center" />
+        <LogoBar place="header" locale="he" href="/residents" label={t.logosHome} priority className="px-4 py-3 text-center" />
+        <BrandStripe />
         <div className="no-print bg-sand">
           <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-4 py-3">
             <BackHome label={t.backHome} />

@@ -12,7 +12,7 @@ const buttons = [
 export default function ResidentsHome() {
   return (
     <>
-      <Wordmark name={t.brand} subtitle={t.subtitle} className="mb-8" />
+      <Wordmark name={t.brand} subtitle={t.subtitle} accent="maroon" className="mb-8" />
       <ul className="space-y-4">
         {buttons.map(({ href, label, Icon }) => (
           <li key={href}>
