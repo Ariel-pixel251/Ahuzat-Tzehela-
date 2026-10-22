@@ -68,15 +68,10 @@ export function isConnectionProblem(err: unknown): boolean {
       "ETIMEDOUT",
       "ECONNRESET",
       "ERR_INVALID_URL",
-      // postgres.js
-      "CONNECT_TIMEOUT",
-      "CONNECTION_CLOSED",
-      "CONNECTION_DESTROYED",
-      "CONNECTION_ENDED",
       // too many connections
       "53300",
     ].includes(code) ||
     /^(08|28|57P0)/.test(code) ||
-    /tenant or user not found|invalid url|max client connections|too many (clients|connections)/i.test(String(e?.message ?? ""))
+    /tenant or user not found|invalid url|max client connections|too many (clients|connections)|connection terminated|timeout exceeded when trying to connect|database query timed out|does not support SSL/i.test(String(e?.message ?? ""))
   );
 }

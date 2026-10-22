@@ -23,9 +23,9 @@ for (const dir of ["app", "lib"]) {
         problems++;
       }
     }
-    // the one database adapter: postgres.js's unsafe(text, params) binds the parameters; its
-    // callers' text is constant (ESLint rule local/no-sql-interpolation)
-    if (/\.unsafe\(/.test(text) && file !== path.join("lib", "db", "postgres.ts")) {
+    // query(text, params) binds the parameters and its callers' text is constant (ESLint rule
+    // local/no-sql-interpolation); an "unsafe" raw-SQL call has no place anywhere
+    if (/\.unsafe\(/.test(text)) {
       console.error(`✗ ${file}: sql.unsafe() is not allowed`);
       problems++;
     }

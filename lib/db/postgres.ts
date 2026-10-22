@@ -1,8 +1,8 @@
-import postgres from "postgres";
+import pg from "pg";
 import { logError } from "../log";
 import type { Db } from "./types";
 
-/** A query that takes longer than this fails (and the connections are reopened) instead of hanging. */
+/** A query that takes longer than this fails (and its connection is closed) instead of hanging. */
 export const QUERY_TIMEOUT_MS = 15_000;
 
 export class DbTimeoutError extends Error {
@@ -11,45 +11,75 @@ export class DbTimeoutError extends Error {
   }
 }
 
+export type PostgresOptions = {
+  max?: number;
+  /** false for a local server without TLS; production encrypts the connection. */
+  ssl?: boolean;
+  connectTimeoutMs?: number;
+};
+
+// dates as UTC midnight (as before the switch from postgres.js), whatever the server's time zone
+const types = {
+  getTypeParser: ((oid: number, format?: "text" | "binary") =>
+    oid === pg.types.builtins.DATE ? (x: string) => new Date(x) : pg.types.getTypeParser(oid, format as "text")) as typeof pg.types.getTypeParser,
+};
+
 /**
- * The production adapter (Supabase through postgres.js). Kept separate from client.ts so the
+ * The production adapter (Supabase through node-postgres). Kept separate from client.ts so the
  * tests can run the same code against a local Postgres-protocol server.
  *
- * Pass JSON parameters as `$n::text::jsonb`, never `$n::jsonb`: postgres.js JSON-encodes values
- * bound to a jsonb parameter, so an already-stringified value would arrive as a JSON string.
+ * node-postgres sends each query with its values in one go (parse, bind, execute, sync), which is
+ * what Supabase's transaction pooler expects. (postgres.js first asked the server to describe the
+ * parameters and waited for the answer; the pooler never passed that on, so every query with
+ * values hung.)
+ *
+ * Pass JSON parameters as `$n::text::jsonb` with JSON.stringify(value).
  */
-export function postgresDb(
-  url: string,
-  options: postgres.Options<Record<string, postgres.PostgresType>> = {},
-  timeoutMs = QUERY_TIMEOUT_MS,
-) {
-  // prepare: false is required for Supabase's transaction pooler. On Vercel a paused function can
-  // come back with connections the pooler already dropped: close idle ones early and renew them often.
-  const open = () => postgres(url, { prepare: false, max: 5, connect_timeout: 10, idle_timeout: 20, max_lifetime: 300, ...options });
-  let sql = open();
-  // unsafe(text, params) is postgres.js's call for a query with bind parameters ($1, $2…): the values
-  // are sent separately from the text. The text itself is always a constant (see eslint.config.mjs).
+export function postgresDb(url: string, options: PostgresOptions = {}, timeoutMs = QUERY_TIMEOUT_MS) {
+  const pool = new pg.Pool({
+    connectionString: url,
+    // Supabase's certificate is signed by its own authority: encrypt, without checking the chain
+    ssl: options.ssl === false ? false : { rejectUnauthorized: false },
+    max: options.max ?? 5,
+    connectionTimeoutMillis: options.connectTimeoutMs ?? 10_000,
+    // on Vercel a paused function can come back with connections the pooler already dropped:
+    // close idle ones early and renew them often
+    idleTimeoutMillis: 20_000,
+    maxLifetimeSeconds: 300,
+    types,
+  });
+  // a dropped idle connection must not crash the server; the pool replaces it
+  pool.on("error", (err) => logError("db: idle connection closed", err));
+
   const db: Db = {
     query: async (text, params = []) => {
-      const current = sql;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new DbTimeoutError()), timeoutMs);
       });
+      const connecting = pool.connect();
+      let client: pg.PoolClient | undefined;
       try {
-        return (await Promise.race([current.unsafe(text, params as never[]), timeout])) as never;
+        client = await Promise.race([connecting, timeout]);
+        // query(text, params) sends the values separately from the text. The text itself is
+        // always a constant (see eslint.config.mjs).
+        const result = await Promise.race([client.query(text, params as unknown[]), timeout]);
+        client.release();
+        return result.rows as never;
       } catch (err) {
-        if (err instanceof DbTimeoutError && sql === current) {
-          // a stuck connection: start over with fresh ones for the next request
-          logError("db: no answer in time, reconnecting", err);
-          sql = open();
-          void current.end({ timeout: 0 }).catch(() => {});
+        if (client) {
+          // true: close this connection rather than reuse it (it may be stuck)
+          client.release(err instanceof DbTimeoutError ? true : undefined);
+        } else {
+          // a connection that arrives after the timeout goes straight back to the pool
+          connecting.then((c) => c.release(), () => {});
         }
+        if (err instanceof DbTimeoutError) logError("db: no answer in time", err);
         throw err;
       } finally {
         clearTimeout(timer);
       }
     },
   };
-  return { db, end: () => sql.end() };
+  return { db, end: () => pool.end() };
 }
