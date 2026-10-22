@@ -41,14 +41,19 @@ test("screenshots", async ({ page }) => {
   await shot(page, "students-slots");
 });
 
-// The logo placements at mobile and desktop width (docs/screenshots/logos/).
-test("logo screenshots", async ({ page }) => {
-  for (const [label, width] of [["mobile", 360], ["desktop", 1280]] as const) {
-    await page.setViewportSize({ width, height: 800 });
-    for (const [name, path] of [["landing", "/"], ["residents", "/residents"], ["students", "/students"], ["residents-privacy", "/residents/privacy"]] as const) {
+// Branding v2 at 360, 768 and 1280px (docs/screenshots/branding/): landing, both homes, both footers.
+test("branding screenshots", async ({ page }) => {
+  for (const width of [360, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [name, path] of [["landing", "/"], ["residents-home", "/residents"], ["students-home", "/students"]] as const) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
-      await shot(page, `logos/after-${name}-${label}`);
+      await shot(page, `branding/after-${name}-${width}`);
+    }
+    for (const [name, path] of [["residents-footer", "/residents"], ["students-footer", "/students"]] as const) {
+      await page.goto(path);
+      await page.waitForLoadState("networkidle");
+      await page.locator("footer").last().screenshot({ path: `docs/screenshots/branding/after-${name}-${width}.png`, caret: "initial" });
     }
   }
 });

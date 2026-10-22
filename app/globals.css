@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
 /*
- * Palette from the logos (design/DESIGN_SYSTEM.md). Every text colour below is at least AAA (7:1) on
- * white, except the student-only orange text (AA, 6.2:1). The raw logo orange and teal are too light
- * for text: they are used only for decoration (stripes, borders, tints).
+ * Palette from the logos (design/DESIGN_SYSTEM.md): brand, teal, maroon and emis are the exact logo
+ * colours, measured by scripts/extract-logo-colors.mjs (design/logo-colors.json; a test keeps them in
+ * sync). Every text colour below is at least AAA (7:1) on white, except the student-only orange text
+ * (AA, 6.2:1). The raw logo orange and teal are too light for text: borders and tints only.
+ * Blue and teal are the main UI colours on both portals; maroon is only an accent on resident-side
+ * partner elements, orange only on student-side partner elements.
  */
 @theme {
   --font-sans: "Heebo Variable", "Heebo", "Assistant", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
@@ -14,17 +17,17 @@
   --color-sand: #eef6f6;
   --color-line: #595959;
   /* "ביחד לדורות" blue: main actions in both portals (white on it 9.2:1) */
-  --color-brand: #164884;
+  --color-brand: #124789;
   --color-brand-dark: #0f3566;
   --color-brand-soft: #e9f0f8;
-  /* Ahuzat Tzahala maroon: the residents' accent (10.7:1 on white) */
-  --color-maroon: #78182a;
+  /* Ahuzat Tzahala maroon: resident-side partner accents only (11.2:1 on white) */
+  --color-maroon: #741529;
   --color-maroon-soft: #f8ecee;
-  /* EMIS orange: the logo colour for decoration only; emis-text for orange text (students, AA) */
-  --color-emis: #fc4a10;
+  /* EMIS orange: student-side partner accents only, never text; emis-text for orange text (students, AA) */
+  --color-emis: #fe480f;
   --color-emis-text: #b5300a;
   /* "ביחד לדורות" teal: decoration only */
-  --color-teal: #90cccc;
+  --color-teal: #8accca;
   --color-ok: #0b5a2a;
   --color-ok-soft: #e3f3e8;
   --color-bad: #8a1414;

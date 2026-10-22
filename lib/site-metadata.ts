@@ -9,7 +9,7 @@ import { publicSiteUrl } from "@/lib/env";
 export function brandMetadata(locale: "en" | "he"): Metadata {
   return {
     metadataBase: new URL(publicSiteUrl()),
-    title: { default: BRAND[locale], template: `%s · ${BRAND[locale]}` },
+    title: { default: BRAND.title[locale], template: `%s · ${BRAND.title[locale]}` },
     description: BRAND.description[locale],
     icons: {
       icon: [
@@ -19,9 +19,9 @@ export function brandMetadata(locale: "en" | "he"): Metadata {
       apple: { url: "/icons/apple-touch-icon.png", sizes: "180x180" },
     },
     openGraph: {
-      title: BRAND[locale],
+      title: BRAND.title[locale],
       description: BRAND.description[locale],
-      siteName: BRAND[locale],
+      siteName: BRAND.branchName[locale],
       locale: locale === "he" ? "he_IL" : "en_GB",
       type: "website",
       images: [
@@ -29,7 +29,7 @@ export function brandMetadata(locale: "en" | "he"): Metadata {
           url: "/og.png",
           width: 1200,
           height: 630,
-          alt: locale === "he" ? "EMIS × אחוזת צהלה – ביחד לדורות" : "EMIS × Ahuzat Tzahala – Together for Generations",
+          alt: `${BRAND.branchName[locale]}. ${BRAND.partnersLabel[locale]} ${locale === "he" ? "אחוזת צהלה ו-EMIS" : "Ahuzat Tzahala and EMIS"}`,
         },
       ],
     },

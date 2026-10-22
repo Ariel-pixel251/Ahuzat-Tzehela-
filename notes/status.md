@@ -35,6 +35,11 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - Logos (owner's request, 2026-10-22): EMIS, Ahuzat Tzahala and "ביחד לדורות" on the landing page, in both portals'
   header (linking home) and footer, in emails (from `NEXT_PUBLIC_SITE_URL`), the tab icon and the share image.
   Sizes and alt text in `config/logos.ts`. Permission note in the README still to be confirmed by the owner.
+- Branding v2 (owner's request, 2026-10-22): the site is the EMIS branch of "ביחד לדורות" (Together for
+  Generations), in partnership with Ahuzat Tzahala. The organisation's logo only appears with "סניף EMIS" /
+  "EMIS Branch" (BrandLockup); EMIS and Ahuzat Tzahala are partners in a strip; every footer has a disclaimer
+  (wording to be confirmed with the organisation, as is the use of its name and logo). Design system:
+  `design/DESIGN_SYSTEM.md`; colours measured from the logos (`scripts/extract-logo-colors.mjs`).
 - "Contact us" removed (owner's request, 2026-10-22): no call-back button, page, table or admin list. Residents'
   home has 3 buttons. The only contact is the organisation's email in the privacy notices (`contactEmail` in
   `config/brand.ts`, still empty). Needs `0003_remove_callback_requests.sql` run in Supabase.
@@ -76,6 +81,8 @@ schema was rewritten, so the live database must be reset once (no real data yet)
       `0003_remove_callback_requests.sql` (before merging the logos PR), each once; `/admin/setup` checks both.
 - [ ] Set `NEXT_PUBLIC_SITE_URL=https://beyachad-ledorot.vercel.app` in Vercel (email logos, share image).
 - [ ] Fill in `contactEmail` in `config/brand.ts`; confirm the logo permission note in the README.
+- [ ] Confirm with "ביחד לדורות" that the branch may use its name and logo, and check the disclaimer wording
+      (`disclaimer` in `config/brand.ts`).
 - [ ] Create the digital support slots in `/admin` → Digital support (weekly series + holiday dates), and the
       podcast times in `/admin` → Podcast.
 - [ ] Turn on two-factor login on GitHub, Vercel, Supabase (and Resend if used).

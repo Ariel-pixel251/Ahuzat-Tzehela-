@@ -24,7 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <>
       <header className="no-print border-b-2 border-line bg-sand">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <Link href="/admin" className="text-lg font-extrabold">{BRAND.en} · Admin</Link>
+          <Link href="/admin" className="text-lg font-extrabold">{BRAND.branchName.en} · Admin</Link>
           <div className="flex items-center gap-3 text-sm">
             <span>{admin.email}</span>
             <form action={adminLogout}>

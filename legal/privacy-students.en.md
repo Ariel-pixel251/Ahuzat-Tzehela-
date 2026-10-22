@@ -3,7 +3,7 @@
 
 ## Who runs this site
 
-This site is run by **[Organisation name]** for the EMIS × Ahuzat Tzahala project. Questions or requests: {{contact_email}}.
+This site is run by **[Organisation name]** for the EMIS branch of Together for Generations, in partnership with Ahuzat Tzahala. Questions or requests: {{contact_email}}.
 
 ## What we collect and why
 

@@ -1,8 +1,10 @@
-# EMIS × אחוזת צהלה – אתר הפרויקט
+# ביחד לדורות, סניף EMIS – אתר הסניף
 
 ## מטרה
 אתר לפרויקט של תלמידי EMIS ודיירי אחוזת צהלה. **שלושה דברים בלבד:** אירועים (מ-Google Calendar, כולל ערב שפות
-וערב משחקים), זוגות פודקאסט, וליווי דיגיטלי במועדים שהמנהלים קובעים. שם הפרויקט במקום אחד: `config/brand.ts`.
+וערב משחקים), זוגות פודקאסט, וליווי דיגיטלי במועדים שהמנהלים קובעים. השמות והניסוח (ביחד לדורות, סניף EMIS, בשיתוף אחוזת צהלה) במקום אחד: `config/brand.ts`.
+**מבנה המותג:** האתר הוא סניף EMIS של הארגון "ביחד לדורות", בשיתוף אחוזת צהלה, ולא האתר הרשמי של הארגון כולו.
+הלוגו של "ביחד לדורות" מופיע תמיד עם "סניף EMIS" / "EMIS Branch" (רק דרך `components/BrandLockup.tsx`).
 מקור התוכן: `notes/meeting-notes.md`. הדרישות וההחלטות: `notes/brief.md`. אבטחה: `SECURITY.md`.
 **מצב נוכחי (מה פרוס, מה נשאר): `notes/status.md` – לקרוא בתחילת כל עבודה ולעדכן בסופה.**
 
@@ -10,7 +12,8 @@
 בעל הפרויקט אינו מתכנת: להסביר צעדים ידניים (Vercel, Supabase, GitHub) בצורה פשוטה, צעד אחר צעד.
 
 ## שני פורטלים, קוד אחד
-- `/` – דף נחיתה: שם הפרויקט ושני כפתורים גדולים.
+- `/` – דף נחיתה: לוגו "ביחד לדורות" עם "סניף EMIS · EMIS Branch", שורת תיאור, שני כפתורים גדולים (עם הלוגו של
+  אחוזת צהלה / EMIS), ולמטה פס שותפים, הבהרה ופרטיות.
 - `/students` – תלמידי EMIS. **אנגלית בלבד, משמאל לימין** (`lang="en" dir="ltr"`).
 - `/residents` – דיירים. **עברית בלבד, מימין לשמאל** (`lang="he" dir="rtl"`), פשוט ככל האפשר.
 - `/admin` – צוות ומנהיגים, באנגלית.
@@ -18,9 +21,10 @@
 
 ## כללי עיצוב לפורטל הדיירים (גוברים על כל כלל אחר ב-`/residents`)
 - עברית פשוטה וקצרה. בלי אנגלית, ז'רגון, קיצורים או אמוג'י שנושא משמעות לבד.
-- דף הבית: שם הפרויקט (בלי ברכה כמו "שלום, במה נוכל לעזור") ו-3 כפתורים גדולים מאוד (סמל + מילים, לפחות 72px):
+- דף הבית: בלי ברכה ובלי טקסט ארוך; שורת התיאור פעם אחת, קטנה, ו-3 כפתורים גדולים מאוד (סמל + מילים, לפחות 72px):
   "מה קורה השבוע?", "עזרה עם הטלפון או המחשב", "פודקאסט". בלי תפריטים, בורר שפה או חלונות קופצים.
-- בכל עמוד: הלוגואים (קישור לדף הראשי), "חזרה לדף הראשי", "הגדל טקסט" (נשמר בדפדפן).
+- בכל עמוד: כותרת לא נעוצה עם "ביחד לדורות, סניף EMIS" (קישור לדף הראשי) וסמל אחוזת צהלה, "חזרה לדף הראשי",
+  "הגדל טקסט" (נשמר בדפדפן). בתחתית: פס שותפים (EMIS, אחוזת צהלה), ההבהרה וקישורים.
 - אין "צרו קשר" (הוסר לבקשת הבעלים): מייל הארגון מופיע רק בהודעת הפרטיות (`contactEmail` ב-`config/brand.ts`).
   "דיווח על בעיה" נשאר (בטיחות).
 - טקסט בסיס 22px ומעלה, כותרות 32px ומעלה, ריווח שורות 1.6, גופן Heebo, ניגודיות AAA, מטרות לחיצה 56px ומעלה.
@@ -68,7 +72,7 @@ problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tas
 | Podcast times (data / admin section / resident wizard step / student form) | `lib/db/podcast.ts`, `app/(en)/admin/(protected)/podcast/`, `lib/wizard-steps.ts` (`podcastSteps`), `components/students/PodcastSignup.tsx`; `supabase/migrations/0002_podcast_times.sql` |
 | Digital support slots (data / admin page / resident wizard / student pages) | `lib/db/slots.ts`, `app/(en)/admin/(protected)/digital-support/`, `lib/wizard-steps.ts` (`helpSteps`), `app/(en)/students/{digital-support,mine}/` |
 | Brand name, contact email (privacy page only), legal texts | `config/brand.ts`, `legal/*.md` (rendered by `components/Markdown.tsx`, `{{contact_email}}` filled in by `lib/legal.ts`), `LEGAL_TODO.md` |
-| Logos (sizes, alt text), favicon, share image, email header | `config/logos.ts`, `components/Logos.tsx`, `public/logos/` (originals in `assets/logos/`), `scripts/make-brand-images.mjs`, `lib/site-metadata.ts`, `lib/notify/html.ts` |
+| Logos (sizes, spacing, alt text), brand lockup, favicon, share image, email header, colours | `config/logos.ts`, `components/BrandLockup.tsx` (the only place the "ביחד לדורות" logo is shown), `components/Logos.tsx` (partners), `public/logos/` (originals in `assets/logos/`), `scripts/make-brand-images.mjs`, `scripts/extract-logo-colors.mjs` → `design/logo-colors.json`, `lib/site-metadata.ts`, `lib/notify/html.ts`, `design/DESIGN_SYSTEM.md` |
 | Security: CSP + admin guard, headers, logging, checks | `proxy.ts`, `next.config.ts`, `lib/log.ts`, `lib/admin-page.ts`, `scripts/check-*.mjs`, `SECURITY.md` |
 | Calendar: iCal parsing, tags/options, seed fallback, event health | `lib/calendar/` |
 | Text (no strings hard-coded in components) | `lib/i18n/en.ts` (students), `lib/i18n/he.ts` (residents); admin pages are English inline |

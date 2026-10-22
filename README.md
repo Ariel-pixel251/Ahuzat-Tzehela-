@@ -1,4 +1,7 @@
-# EMIS × Ahuzat Tzahala
+# Together for Generations, EMIS Branch
+
+The website of the **EMIS branch of Together for Generations (ביחד לדורות)**, in partnership with the Ahuzat Tzahala
+residence. It is not the official website of the whole organisation.
 
 Website for the project of EMIS students and the residents of Ahuzat Tzahala: **events**, **podcast pairs**
 and **digital support (ליווי דיגיטלי)**. The name lives in one place: `config/brand.ts`.
@@ -196,17 +199,27 @@ These rules win over anything else for `/residents`:
 - No accounts or passwords. Checked automatically: axe on every resident page, no horizontal scroll at 360px and
   at 200% zoom, the full flows with Playwright, including keyboard only.
 
-## Logos
+## Brand and logos
 
-The site shows three logos: **EMIS**, **Ahuzat Tzahala** (אחוזת צהלה) and the program's logo **ביחד לדורות** (Together
-for Generations). The originals are in `assets/logos/` (see its README); the site uses the copies in `public/logos/`.
-Sizes and alt text are in `config/logos.ts` (logos are never shown larger than half their file's height, so
-retina screens never get a scaled-up image). The browser-tab icons, the share image (`public/og.png`) and the small
-email copies are made from them with `node scripts/make-brand-images.mjs`.
+**Brand structure.** "ביחד לדורות" (Together for Generations) is a larger organisation; this site is only its
+**EMIS branch**, run together with the Ahuzat Tzahala residence. So:
 
-> **These logos belong to their owners** (EMIS – Eastern Mediterranean International School, Ahuzat Tzahala, and the
-> "ביחד לדורות" program) **and are used with the permission of these organizations.**
-> _To confirm by the project owner: [who gave permission, and when]._
+1. The organisation's logo is **always** shown with the branch label "סניף EMIS" / "EMIS Branch", as one unit
+   (`components/BrandLockup.tsx`, the only component that may show it; `e2e/branding.spec.ts` fails if any page
+   shows the logo without the label). This includes the tab icon, the share image and emails.
+2. EMIS and Ahuzat Tzahala are **partners**, shown smaller in a partners strip ("בשיתוף" / "In partnership with").
+3. Every footer carries a disclaimer that this is not the whole organisation's official website.
+
+Names, the tagline, tab titles and the disclaimer are in `config/brand.ts`. The originals of the logos are in
+`assets/logos/` (see its README); the site uses the copies in `public/logos/`. Sizes, clear space and alt text are
+in `config/logos.ts`. The brand colours are measured from the logo files with `node scripts/extract-logo-colors.mjs`
+(→ `design/logo-colors.json`, used in `app/globals.css`). The tab icons, the share image (`public/og.png`) and
+the email logos are made with `node scripts/make-brand-images.mjs`. The design system is in `design/DESIGN_SYSTEM.md`.
+
+> **These logos belong to their owners** (EMIS – Eastern Mediterranean International School, Ahuzat Tzahala, and
+> "ביחד לדורות" / Together for Generations) **and are used with the permission of these organizations.**
+> _To confirm by the project owner: [who gave permission, and when], including that the branch may use the
+> "ביחד לדורות" name and logo, and the wording of the disclaimer._
 
 ## Project layout
 
