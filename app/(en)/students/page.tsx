@@ -20,11 +20,11 @@ export default async function StudentsHome() {
     .sort((a, b) => a.date.localeCompare(b.date));
   return (
     <>
-      <Wordmark name={t.brand} subtitle={t.subtitle} className="mb-8" />
+      <Wordmark name={t.brand} subtitle={t.subtitle} accent="emis" className="mb-8" />
       <ul className="grid gap-4 sm:grid-cols-2">
         {cards.map((c) => (
           <li key={c.href}>
-            <Link href={c.href} className="block h-full rounded-2xl border-2 border-line p-5 text-ink no-underline hover:border-brand">
+            <Link href={c.href} className="block h-full rounded-2xl border-2 border-t-8 border-line border-t-emis p-5 text-ink no-underline hover:border-brand hover:border-t-emis">
               <h2 className="text-xl font-extrabold text-brand">{c.title}</h2>
               <p className="mt-1">{c.text}</p>
             </Link>

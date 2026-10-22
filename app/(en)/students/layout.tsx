@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogoBar } from "@/components/Logos";
+import { BrandStripe, LogoBar } from "@/components/Logos";
 import { Nav } from "@/components/students/Nav";
 import { studentsText as t } from "@/lib/i18n";
 
@@ -17,7 +17,8 @@ export default function StudentsLayout({ children }: { children: React.ReactNode
         {t.skip}
       </a>
       <header className="border-b-2 border-line">
-        <LogoBar place="header" locale="en" href="/students" label={t.logosHome} priority className="px-4 pt-3 text-center" />
+        <LogoBar place="header" locale="en" href="/students" label={t.logosHome} priority className="px-4 py-3 text-center" />
+        <BrandStripe />
         <div className="no-print bg-sand">
           <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-2 px-4 py-3">
             <Link href="/students" className="text-lg font-black tracking-tight text-ink no-underline">

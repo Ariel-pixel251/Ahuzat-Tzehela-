@@ -62,3 +62,18 @@ export function LogoBar({
     </div>
   );
 }
+
+/**
+ * A thin flat stripe in the logos' colours (EMIS orange, ביחד לדורות teal and blue, Ahuzat
+ * Tzahala maroon) under the logo header. Decoration only: hidden from screen readers, no motion.
+ */
+export function BrandStripe({ className = "" }: { className?: string }) {
+  return (
+    <div aria-hidden="true" className={`flex h-1.5 w-full ${className}`}>
+      <span className="flex-1 bg-emis" />
+      <span className="flex-1 bg-teal" />
+      <span className="flex-1 bg-brand" />
+      <span className="flex-1 bg-maroon" />
+    </div>
+  );
+}

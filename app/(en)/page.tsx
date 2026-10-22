@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Logo } from "@/components/Logos";
+import { BrandStripe, Logo } from "@/components/Logos";
 import { BRAND } from "@/config/brand";
 
 /**
@@ -9,6 +9,7 @@ import { BRAND } from "@/config/brand";
 export default function Landing() {
   return (
     <main id="main" className="mx-auto flex min-h-svh max-w-xl flex-col justify-center gap-6 bg-paper px-4 py-10">
+      <BrandStripe className="overflow-hidden rounded-full" />
       <header lang="he" dir="rtl" className="text-center">
         {/* the two partners side by side, in reading order of the name ("EMIS × אחוזת צהלה") */}
         <div dir="ltr" className="flex items-center justify-center gap-4 sm:gap-6">
@@ -35,7 +36,7 @@ export default function Landing() {
         href="/residents"
         lang="he"
         dir="rtl"
-        className="flex min-h-[96px] items-center justify-center rounded-2xl border-4 border-ink bg-white px-6 text-center text-3xl font-extrabold text-ink hover:bg-sand"
+        className="flex min-h-[96px] items-center justify-center rounded-2xl border-4 border-maroon bg-white px-6 text-center text-3xl font-extrabold text-maroon hover:bg-maroon-soft"
       >
         אני דייר/ת באחוזת צהלה
       </Link>
