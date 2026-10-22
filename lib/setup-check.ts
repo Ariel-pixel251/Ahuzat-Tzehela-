@@ -50,13 +50,14 @@ async function checkDatabase(): Promise<Check[]> {
       },
     ];
   }
-  let row: { functions: boolean; schema: boolean; old: boolean; slots: number };
+  let row: { functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean };
   try {
     const db = await getDb();
     // one query proves the connection, the tables (digital_slots), the functions (hit_rate_limit),
     // and whether tables from before the 2026 rewrite are still there
-    [row] = await db.query<{ functions: boolean; schema: boolean; old: boolean; slots: number }>(
+    [row] = await db.query<{ functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean }>(
       `select to_regproc('public.hit_rate_limit') is not null as functions,
+              to_regproc('public.podcast_join') is not null as podcast_times,
               to_regclass('public.digital_slots') is not null as schema,
               to_regclass('public.lesson_topics') is not null or to_regclass('public.digital_requests') is not null as old,
               case when to_regclass('public.digital_slots') is null then 0
@@ -80,6 +81,17 @@ async function checkDatabase(): Promise<Check[]> {
     ];
   }
   if (!row.functions) return dbProblem({ code: "42883" });
+  // later migrations, each pasted into Supabase once
+  if (!row.podcast_times) {
+    return [
+      {
+        name: "Database update (podcast times)",
+        status: "bad",
+        detail: "The database is missing the podcast times update, so podcast sign-ups and the podcast admin page don't work.",
+        fix: "In Supabase → SQL Editor → New query, paste supabase/migrations/0002_podcast_times.sql from GitHub and click Run (once).",
+      },
+    ];
+  }
   const approval = Boolean(await getSetting(await getDb(), "require_helper_approval", false).catch(() => false));
   return [
     { name: "Database", status: "ok", detail: "Connected, and the tables are set up." },

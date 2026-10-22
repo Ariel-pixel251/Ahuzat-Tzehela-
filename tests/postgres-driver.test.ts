@@ -172,6 +172,23 @@ test("podcast topics, pairs and the status lookup", async () => {
   expect(await lookupStatus(db, "0521111111", a.code)).toEqual([{ type: "podcast", status: "paired" }]);
 });
 
+test("podcast times: weekly times, choosing one (a JSON parameter), and a pair meeting at it", async () => {
+  const first = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+  const last = new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10);
+  expect(await podcast.createPodcastTimes(db, { time_date: first, start_time: "10:00", end_time: "11:00", place_he: "בלובי", place_en: null, pairs: 1 }, last)).toBe(2);
+  const [time] = await podcast.listUpcomingTimes(db);
+  expect(time).toMatchObject({ time_date: first, residents: 0, students: 0, open: true });
+  expect(time.starts_at).toBeInstanceOf(Date);
+  const base = { email: null, topics: ["music"], language: "he", availability: null, registered_by: null, time_id: time.id };
+  const a = await podcast.joinPodcastAt(db, { ...base, name: "T1", phone: "0531111111", portal: "resident" });
+  const b = await podcast.joinPodcastAt(db, { ...base, name: "T2", phone: "0532222222", portal: "student" });
+  expect((await podcast.joinPodcastAt(db, { ...base, name: "T3", phone: "0533333333", portal: "resident" })).status).toBe("full");
+  if (a.status !== "joined" || b.status !== "joined") throw new Error("not joined");
+  expect((await podcast.getParticipant(db, a.id))?.topics).toEqual(["music"]);
+  const pairId = (await podcast.makePair(db, a.id, b.id))!;
+  expect(await podcast.getPairMeeting(db, pairId)).toEqual({ date: first, time: "10:00", place: "בלובי" });
+});
+
 test("rate limit through the driver", async () => {
   expect(await hitRateLimit(db, "drv", 1, 60)).toBe(true);
   expect(await hitRateLimit(db, "drv", 1, 60)).toBe(false);

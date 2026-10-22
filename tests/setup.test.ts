@@ -3,7 +3,6 @@ import { describeDbError, isConnectionProblem } from "@/lib/db/errors";
 import { DbNotConfiguredError } from "@/lib/db/types";
 import { cleanEnvValue, parseEmailList, studentEmailAllowed } from "@/lib/env";
 import { adminEmailReason } from "@/lib/setup-status";
-import { formatHours, parseTimeRange, TIMES } from "@/config/options";
 import { v } from "@/lib/validation";
 
 describe("settings pasted into Vercel", () => {
@@ -65,25 +64,12 @@ test("admin sign-in email failures get a plain reason", () => {
   expect(adminEmailReason("something odd")).toMatch(/see the error/);
 });
 
-test("times are a from–until range or 'arrange by message'; old morning/afternoon choices still read", () => {
-  expect(TIMES[0]).toBe("08:00");
-  expect(TIMES[1]).toBe("08:30");
-  expect(TIMES.at(-1)).toBe("20:00");
-  expect(parseTimeRange("10:00-12:30")).toEqual({ from: "10:00", until: "12:30" });
-  expect(parseTimeRange("12:00-10:00")).toBeNull();
-  expect(parseTimeRange("07:00-09:00")).toBeNull();
-  expect(parseTimeRange("10:15-11:00")).toBeNull();
-  expect(formatHours(["10:00-12:30"], "en")).toBe("10:00–12:30");
-  expect(formatHours(["contact"], "he")).toBe("נתאם שעה בהודעה");
-  expect(formatHours(["contact"], "en")).toBe("Arrange the time by message");
-  expect(formatHours([], "en")).toBe("");
-  expect(formatHours(["morning"], "he")).toBe("בוקר");
-
-  const parse = (hours?: string) => v.timeChoice.safeParse(hours);
-  expect(parse("19:30-20:00").data).toEqual(["19:30-20:00"]);
-  expect(parse("contact").data).toEqual(["contact"]);
-  expect(parse("").data).toEqual([]);
-  expect(parse(undefined).data).toEqual([]);
-  expect(parse("20:00-21:00").success).toBe(false);
-  expect(parse("anything").success).toBe(false);
+test("a podcast time is one of the team's times (an id) or 'arrange by message'", () => {
+  const parse = (time?: string) => v.podcastTime.safeParse(time);
+  expect(parse("2b1f0c7e-1d3a-4c5b-9e8f-0a1b2c3d4e5f").data).toBe("2b1f0c7e-1d3a-4c5b-9e8f-0a1b2c3d4e5f");
+  expect(parse("contact").data).toBeNull();
+  expect(parse("").success).toBe(false);
+  expect(parse(undefined).success).toBe(false);
+  expect(parse("10:00-12:00").success).toBe(false);
+  expect(parse("'; drop table podcast_times; --").success).toBe(false);
 });

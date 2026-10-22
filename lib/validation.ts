@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isLanguageCode } from "@/config/languages";
-import { isTimeChoice } from "@/config/options";
+import { ARRANGE_BY_MESSAGE } from "@/config/options";
 import { shared, type Shared } from "@/lib/i18n/en";
 import { HONEYPOT } from "@/lib/form";
 import { normalizePhone } from "@/lib/phone";
@@ -132,13 +132,12 @@ export const v = {
     .string()
     .optional()
     .transform((s) => s === "on"),
-  /** One time range ("10:00-12:00") or "contact", stored as a list; empty means any time. */
-  timeChoice: z
+  /** One of the team's podcast times (its id), or "contact" (arrange by message) → null. */
+  podcastTime: z
     .string()
-    .optional()
-    .transform((s) => s?.trim() ?? "")
-    .refine((s) => s === "" || isTimeChoice(s), "choose")
-    .transform((s) => (s ? [s] : [])),
+    .trim()
+    .refine((s) => s === ARRANGE_BY_MESSAGE || UUID.test(s), "choose")
+    .transform((s) => (s === ARRANGE_BY_MESSAGE ? null : s)),
   consent: z.literal("on", { message: "consent" }),
   /** A calendar event key (iCal UID, maybe with "::date"): printable characters only. */
   eventKey: z.string().min(1, "choose").max(600, "choose").regex(/^[\x21-\x7e]+$/, "choose"),

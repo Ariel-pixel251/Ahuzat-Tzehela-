@@ -63,6 +63,11 @@ export function formatSlotWhen(s: { slot_date: string; start_time: string; end_t
     : `${formatDay(s.slot_date, "en")}, ${s.start_time}–${s.end_time}`;
 }
 
+/** A podcast time (set by the team) in one line, like a slot. */
+export function formatPodcastTime(t: { time_date: string; start_time: string; end_time: string; place_he: string; place_en: string | null }, locale: Locale) {
+  return formatSlot({ ...t, slot_date: t.time_date }, locale);
+}
+
 /** The slot's time and place in one line, e.g. "יום שלישי, 3 בנובמבר, 16:00 עד 17:30, בחדר הקהילה". */
 export function formatSlot(s: { slot_date: string; start_time: string; end_time: string; place_he: string; place_en: string | null }, locale: Locale) {
   const place = locale === "he" ? s.place_he : (s.place_en ?? s.place_he);

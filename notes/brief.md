@@ -44,7 +44,8 @@ where they conflict) and how it was implemented. The source notes are in `meetin
 - Students who volunteer give an age group; under-18s also a parent or guardian's name, phone and okay.
 - Admins can make podcast pairs and add slot helpers with people who never signed up (typed in by staff), and
   can send them a "who and when" message (owner's request).
-- The podcast wizard keeps the hour scroll wheels (owner's request, an exception to "big buttons only").
+- Podcast times are set by the admins, like digital support slots (owner's request, 2026-10-22; this replaced the
+  hour scroll wheels): residents and students choose one, or "arrange by message"; a pair who chose the same time meets then.
 - Seed events (offline fallback only) come from the meeting notes; they never open registration.
 
 ## Still open

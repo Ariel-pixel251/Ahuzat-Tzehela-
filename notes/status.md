@@ -29,8 +29,9 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
   `https://ahuzattzehela.vercel.app/admin/auth/callback` until the new one is confirmed working).
 - Address changed to `https://beyachad-ledorot.vercel.app` (2026-10-20). Needs `SITE_URL` = that address in Vercel, the Supabase
   Site URL/redirect above, and a redeploy. Use only this address on posters, QR codes and messages.
-- Time choice in the podcast wizard: "from"/"until" scroll wheels (08:00–20:00, half hours) or "send me a
-  message and we'll arrange a time".
+- Podcast times (owner's request, 2026-10-22, replacing the hour scroll wheels): the admin creates them on
+  /admin → Podcast (once or weekly, with a number of pairs); residents and students choose one when they sign up,
+  or "arrange by message". A pair who chose the same time meets then. Needs `0002_podcast_times.sql` run in Supabase.
 
 ## Lessons from the first deploy
 

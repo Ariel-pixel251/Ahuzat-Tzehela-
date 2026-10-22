@@ -8,7 +8,7 @@ This site is run by **[Organisation name]** for the EMIS × Ahuzat Tzahala proje
 ## What we collect and why
 
 - **Event registration:** your name, email, phone (language night only, otherwise optional), the languages you speak and your notes. We use them to manage the event and to send you a confirmation and reminder.
-- **Podcast:** your name, email, optional phone, interests, preferred language and availability, to find you a partner.
+- **Podcast:** your name, email, optional phone, interests, preferred language and the podcast time you choose, to find you a partner.
 - **Digital support volunteering:** your name, school email, optional phone, your age group, and, if you're under 18, a parent or guardian's name and phone and their agreement. We use them to organise the slots and keep everyone safe.
 - **Reports:** what you write in "Report a problem", and contact details only if you choose to give them.
 

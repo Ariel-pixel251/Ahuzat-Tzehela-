@@ -5,7 +5,8 @@ import { getDb } from "@/lib/db/client";
 import { listRegistrations } from "@/lib/db/events";
 import { listLeaders, listTasks } from "@/lib/db/leaders";
 import * as misc from "@/lib/db/misc";
-import { listPairs, listParticipants } from "@/lib/db/podcast";
+import { listAllTimes, listPairs, listParticipants } from "@/lib/db/podcast";
+import { formatPodcastTime } from "@/lib/i18n/format";
 import { listBookingsForAdmin, listSlotsForAdmin, listVolunteersForAdmin } from "@/lib/db/slots";
 import type { Db } from "@/lib/db/types";
 
@@ -36,11 +37,15 @@ const exports: Record<string, Export> = {
     ];
   },
   podcast: async (db) => {
-    const [people, pairs] = await Promise.all([listParticipants(db), listPairs(db)]);
+    const [people, pairs, times] = await Promise.all([listParticipants(db), listPairs(db), listAllTimes(db)]);
+    const timeOf = (id: string | null | undefined) => {
+      const x = id ? times.find((t) => t.id === id) : null;
+      return x ? formatPodcastTime(x, "en") : "";
+    };
     const partner = (id: string) => pairs.find((p) => p.members.some((m) => m.id === id))?.members.find((m) => m.id !== id)?.name ?? "";
     return [
-      ["name", "portal", "email", "phone", "topics", "language", "availability", "status", "partner", "active", "code", "registered_by", "created_at"],
-      people.map((p) => [p.name, p.portal, p.email, p.phone, p.topics, p.language, p.availability, p.status, partner(p.id), p.active, p.code, p.registered_by, p.created_at]),
+      ["name", "portal", "email", "phone", "topics", "language", "time", "availability", "status", "partner", "active", "code", "registered_by", "created_at"],
+      people.map((p) => [p.name, p.portal, p.email, p.phone, p.topics, p.language, timeOf(p.time_id), p.availability, p.status, partner(p.id), p.active, p.code, p.registered_by, p.created_at]),
     ];
   },
   callbacks: async (db) => [

@@ -1,11 +1,12 @@
 "use server";
 
 import { z } from "zod";
-import { DAYS, DIGITAL_NEEDS, formatHours, PODCAST_TOPICS } from "@/config/options";
+import { DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
 import { LANGUAGES } from "@/config/languages";
 import { eventForm, getCalendar, getEvent } from "@/lib/calendar";
 import * as eventsDb from "@/lib/db/events";
 import { clearCodeFailures, codeAttempt, createCallback, createProblemReport, isBlocked, lookupStatus } from "@/lib/db/misc";
+import * as podcastDb from "@/lib/db/podcast";
 import * as slotsDb from "@/lib/db/slots";
 import { bookDigital, cancelEventRegistration, joinPodcast, registerEvent } from "@/lib/domain";
 import type { ActionState } from "@/lib/form";
@@ -15,13 +16,6 @@ import { form, formObject, v, validate } from "@/lib/validation";
 
 const he = shared("he").errors;
 const contact = { name: v.name, phone: v.phone(), email: v.optionalEmail };
-
-/** Availability as "English | עברית", following the site's bilingual convention. */
-function availabilityText(days: string[], hours: string[]) {
-  const part = (locale: "en" | "he") =>
-    [days.map((c) => DAYS.find((o) => o.code === c)?.[locale] ?? c).join(", "), formatHours(hours, locale)].filter(Boolean).join(" · ");
-  return days.length || hours.length ? `${part("en")} | ${part("he")}` : null;
-}
 
 // ---------------------------------------------------------------- event registration
 
@@ -118,10 +112,9 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
       ...contact,
       topics: v.codes(PODCAST_TOPICS, { min: 1 }),
       language: v.language,
-      days: v.codes(DAYS),
-      hours: v.timeChoice,
+      time: v.podcastTime,
     });
-    const r = validate(schema, formObject(fd, ["topics", "days"]));
+    const r = validate(schema, formObject(fd, ["topics"]));
     if (!r.ok) return invalid(r.errors, "he");
     const res = await joinPodcast(
       db,
@@ -132,14 +125,21 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
         portal: "resident",
         topics: r.data.topics,
         language: r.data.language,
-        availability: availabilityText(r.data.days, r.data.hours),
+        availability: null,
         registered_by: null,
+        time_id: r.data.time,
       },
       await getBaseUrl(),
     );
     if (res === "blocked") return { ok: false, message: he.unavailable };
-    if (!res) return { ok: false, message: he.alreadyJoined };
-    return { ok: true, code: res.code };
+    if (res.status === "duplicate") return { ok: false, message: he.alreadyJoined };
+    if (res.status !== "joined") {
+      const message = res.status === "full" ? he.slotFull : he.slotClosed;
+      // back to the time question, where another time can be chosen
+      return { ok: false, message, errors: { time: message } };
+    }
+    const time = r.data.time ? await podcastDb.getPodcastTime(db, r.data.time) : null;
+    return { ok: true, code: res.code, data: time ? { slot: { ...time, slot_date: time.time_date } } : undefined };
   });
 }
 

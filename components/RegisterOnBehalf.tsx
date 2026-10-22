@@ -5,7 +5,7 @@ import { registerOnBehalf } from "@/app/actions/admin";
 import { ActionForm, MultiSelect, SelectField, TextField } from "@/components/forms";
 import { Notice } from "@/components/ui";
 import { LANGUAGES } from "@/config/languages";
-import { DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
+import { ARRANGE_BY_MESSAGE, DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
 
 const TYPES = [
   { value: "event", label: "Event registration" },
@@ -22,10 +22,13 @@ export function RegisterOnBehalf({
   staff,
   events,
   slots,
+  podcastTimes,
 }: {
   staff: string;
   events: { key: string; label: string; form: string; languages: boolean }[];
   slots: { id: string; label: string; full: boolean }[];
+  /** upcoming podcast times (staff may also choose a full or closed one) */
+  podcastTimes: { id: string; label: string }[];
 }) {
   const [type, setType] = useState("event");
   const [eventKey, setEventKey] = useState(events[0]?.key ?? "");
@@ -92,7 +95,12 @@ export function RegisterOnBehalf({
           <>
             <MultiSelect name="topics" label="Topics" options={opts(PODCAST_TOPICS)} summary={(n) => (n ? `${n} selected` : "Choose…")} />
             <SelectField name="language" label="Preferred language" defaultValue="he" options={languages} />
-            <TextField name="availability" label="Availability" />
+            <SelectField
+              name="time"
+              label="Podcast time"
+              defaultValue={podcastTimes[0]?.id ?? ARRANGE_BY_MESSAGE}
+              options={[...podcastTimes.map((x) => ({ value: x.id, label: x.label })), { value: ARRANGE_BY_MESSAGE, label: "No time: arrange by message" }]}
+            />
           </>
         )}
       </ActionForm>

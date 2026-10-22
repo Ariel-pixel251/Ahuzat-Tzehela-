@@ -24,8 +24,8 @@
 - טקסט בסיס 22px ומעלה, כותרות 32px ומעלה, ריווח שורות 1.6, גופן Heebo, ניגודיות AAA, מטרות לחיצה 56px ומעלה.
 - טפסים כאשף: שאלה אחת בכל מסך, "הבא"/"חזרה", "שלב 2 מתוך 4", כפתורי בחירה גדולים במקום רשימות נפתחות,
   מסך סיכום וכפתור אחד "אני מאשר/ת ושולח/ת". אחרי השליחה: אישור רגוע וקוד בקשה בן 4 ספרות.
-  חריג לבקשת הבעלים: בפודקאסט השעות נבחרות בשני גלגלי גלילה ("משעה"/"עד שעה", 08:00–20:00 כל חצי שעה) עם
-  כפתורי "מוקדם יותר"/"מאוחר יותר", ואפשרות "שלחו לי הודעה ונתאם" (`components/TimeRange.tsx`).
+  בפודקאסט בוחרים אחד ממועדי הפודקאסט שהמנהלים יוצרים (`podcast_times`, כמו מועדי הליווי הדיגיטלי), או
+  "אף מועד לא מתאים? שלחו לי הודעה ונתאם". זוג שבחר אותו מועד נפגש בו.
 - רק שם, טלפון (כל פורמט ישראלי) והבחירה עצמה. מייל לא חובה. הודעות שגיאה ידידותיות. שום דבר לא פג תוקף.
 - תאריכים במילים ("יום שני, 1 בנובמבר, בשעה 17:30"), אף פעם לא בפורמט ISO.
 - בלי חשבונות וסיסמאות לדיירים. בדיקות axe ו-Playwright ב-CI חייבות לעבור.
@@ -46,7 +46,7 @@ Next.js (App Router) + TypeScript + Tailwind, Supabase (Postgres + RLS, Auth ל�
 Vercel (אירוח ו-cron יומי). מקומית: PGlite במקום Supabase, בלי הגדרות.
 
 ## ישויות
-event_registrations (לפי UID של אירוע ביומן), digital_slots / digital_slot_series / digital_blocked_dates,
+event_registrations (לפי UID של אירוע ביומן), podcast_times, digital_slots / digital_slot_series / digital_blocked_dates,
 digital_bookings (דיירים), digital_volunteers (תלמידים), students, podcast_participants/pairs, callback_requests,
 problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tasks, outbound_messages, settings.
 הוסרו (מחוץ לתחום): שיעורים פרטיים, קורסים ומערכת שעות, בקשות ביקור, הצעות הרצאה, "זיכרון בסלון", הודעות באנר,
@@ -63,6 +63,7 @@ problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tas
 | Business rules shared by portals and admin (registration, claiming, pairing, notifications) | `lib/domain.ts` |
 | SQL data access; every function takes a `Db` | `lib/db/*.ts`; connection in `lib/db/client.ts` |
 | Schema, RLS, atomic SQL functions (booking, volunteering, pairing, retention) | `supabase/migrations/0001_init.sql`; `supabase/reset.sql` (one-time, old schema) |
+| Podcast times (data / admin section / resident wizard step / student form) | `lib/db/podcast.ts`, `app/(en)/admin/(protected)/podcast/`, `lib/wizard-steps.ts` (`podcastSteps`), `components/students/PodcastSignup.tsx`; `supabase/migrations/0002_podcast_times.sql` |
 | Digital support slots (data / admin page / resident wizard / student pages) | `lib/db/slots.ts`, `app/(en)/admin/(protected)/digital-support/`, `lib/wizard-steps.ts` (`helpSteps`), `app/(en)/students/{digital-support,mine}/` |
 | Brand name, legal texts | `config/brand.ts`, `legal/*.md` (rendered by `components/Markdown.tsx`), `LEGAL_TODO.md` |
 | Security: CSP + admin guard, headers, logging, checks | `proxy.ts`, `next.config.ts`, `lib/log.ts`, `lib/admin-page.ts`, `scripts/check-*.mjs`, `SECURITY.md` |

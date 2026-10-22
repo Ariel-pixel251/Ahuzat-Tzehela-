@@ -4,13 +4,14 @@ import { PageTitle } from "@/components/ui";
 import { adminPage } from "@/lib/admin-page";
 import { eventForm, getCalendar } from "@/lib/calendar";
 import { freePlaces, listUpcomingSlots } from "@/lib/db/slots";
-import { formatSlot } from "@/lib/i18n/format";
+import { listUpcomingTimes, placesLeft } from "@/lib/db/podcast";
+import { formatPodcastTime, formatSlot } from "@/lib/i18n/format";
 
 export const metadata: Metadata = { title: "Register a resident" };
 
 export default async function RegisterResident() {
   const { admin, db } = await adminPage();
-  const [calendar, slots] = await Promise.all([getCalendar(), listUpcomingSlots(db)]);
+  const [calendar, slots, times] = await Promise.all([getCalendar(), listUpcomingSlots(db), listUpcomingTimes(db)]);
   const events = calendar.upcoming
     .map((e) => ({ e, form: eventForm(e) }))
     .filter(({ form }) => form && form !== "podcast")
@@ -23,7 +24,15 @@ export default async function RegisterResident() {
       <PageTitle lead="For phone calls and residents who prefer not to use the site. Saved as &quot;registered by staff&quot;.">
         Register a resident
       </PageTitle>
-      <RegisterOnBehalf staff={admin.email} events={events} slots={slotChoices} />
+      <RegisterOnBehalf
+        staff={admin.email}
+        events={events}
+        slots={slotChoices}
+        podcastTimes={times.map((x) => ({
+          id: x.id,
+          label: `${formatPodcastTime(x, "en")} (${placesLeft(x, "resident")} of ${x.pairs} resident places free${x.open ? "" : ", closed"})`,
+        }))}
+      />
     </>
   );
 }
