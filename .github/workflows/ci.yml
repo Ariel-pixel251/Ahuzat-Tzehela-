@@ -46,7 +46,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # resident, student and admin flows, accessibility (axe), security headers, against a local database and a fixture calendar
       - run: npx playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-results
