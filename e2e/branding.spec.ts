@@ -44,11 +44,12 @@ for (const path of PAGES) {
   });
 }
 
-test("landing: logo + branch label, tagline, two partner doors, partners strip, disclaimer and privacy links", async ({ page }) => {
+test("landing: logo + branch label, two partner doors, partners strip, disclaimer and privacy links; no description line", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("img", { name: "ביחד לדורות, סניף EMIS" })).toBeVisible();
   await expect(page.getByText("EMIS Branch", { exact: true })).toBeVisible();
-  await expect(page.getByText("סניף EMIS של ביחד לדורות, בשיתוף אחוזת צהלה")).toBeVisible();
+  await expect(page.getByText("סניף EMIS של ביחד לדורות, בשיתוף אחוזת צהלה")).toHaveCount(0);
+  await expect(page.getByText("The EMIS branch of Together for Generations, in partnership with Ahuzat Tzahala")).toHaveCount(0);
   const residents = page.getByRole("link", { name: "אני דייר/ת באחוזת צהלה" });
   const students = page.getByRole("link", { name: "I'm an EMIS student" });
   for (const door of [residents, students]) {

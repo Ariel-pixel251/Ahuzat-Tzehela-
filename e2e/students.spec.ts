@@ -2,12 +2,21 @@ import { expect, test } from "@playwright/test";
 
 // Student portal (English): the home page, event registration and podcast sign-up.
 
-test("home: the branch's name and tagline, and Events, Digital support, Podcast and My sign-ups", async ({ page }) => {
+test("home: the branch's name (for screen readers), and Events, Digital support, Podcast and My sign-ups", async ({ page }) => {
   await page.goto("/students");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Together for Generations, EMIS Branch");
-  await expect(page.getByText("The EMIS branch of Together for Generations, in partnership with Ahuzat Tzahala").first()).toBeVisible();
+  await expect(page.getByText("The EMIS branch of Together for Generations, in partnership with Ahuzat Tzahala")).toHaveCount(0);
   for (const name of ["Events", "Digital support", "Podcast", "My sign-ups"]) {
     await expect(page.locator("main").getByRole("link", { name: new RegExp(`^${name}`) }).first()).toBeVisible();
+  }
+});
+
+test("'Back to main page' in the header leads from any student page to the landing page", async ({ page }) => {
+  for (const path of ["/students", "/students/events", "/students/podcast"]) {
+    await page.goto(path);
+    await page.getByRole("link", { name: "Back to main page" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("link", { name: "I'm an EMIS student" })).toBeVisible();
   }
 });
 

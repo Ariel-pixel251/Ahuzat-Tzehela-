@@ -9,14 +9,10 @@
 export const BRAND = {
   /** the parent organisation (its logo is shown only through components/BrandLockup.tsx) */
   organizationName: { he: "ביחד לדורות", en: "Together for Generations" },
-  /** always shown with the organisation's logo, in the same size class as the tagline */
+  /** always shown with the organisation's logo */
   branchLabel: { he: "סניף EMIS", en: "EMIS Branch" },
   /** the organisation and the branch together, as one name (alt text, email signatures) */
   branchName: { he: "ביחד לדורות, סניף EMIS", en: "Together for Generations, EMIS Branch" },
-  tagline: {
-    he: "סניף EMIS של ביחד לדורות, בשיתוף אחוזת צהלה",
-    en: "The EMIS branch of Together for Generations, in partnership with Ahuzat Tzahala",
-  },
   partnersLabel: { he: "בשיתוף", en: "In partnership with" },
   /** browser tab title (and the start of every page's title) */
   title: {

@@ -11,9 +11,8 @@ const buttons = [
 export default function ResidentsHome() {
   return (
     <>
-      {/* no greeting and no long text: the name for screen readers, the tagline once, then the buttons */}
+      {/* no greeting and no text: the name for screen readers, then the buttons */}
       <h1 className="sr-only">{t.branchName}</h1>
-      <p className="mb-8 text-muted">{t.tagline}</p>
       <ul className="space-y-6">
         {buttons.map(({ href, label, Icon }) => (
           <li key={href}>

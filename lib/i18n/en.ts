@@ -67,7 +67,7 @@ export const shared: Shared = {
 
 export const students = {
   branchName: BRAND.branchName.en,
-  tagline: BRAND.tagline.en,
+  backToMain: "Back to main page",
   nav: {
     label: "Main",
     home: "Home",
