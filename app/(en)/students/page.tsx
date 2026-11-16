@@ -20,7 +20,6 @@ export default async function StudentsHome() {
   return (
     <>
       <h1 className="sr-only">{t.branchName}</h1>
-      <p className="mb-8 text-lg font-bold text-ink">{t.tagline}</p>
       <ul className="grid gap-4 sm:grid-cols-2">
         {cards.map((c) => (
           <li key={c.href}>

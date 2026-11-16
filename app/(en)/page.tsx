@@ -7,7 +7,7 @@ const door =
   "flex min-h-[96px] w-full items-center justify-center gap-4 rounded-2xl border-4 bg-white px-5 py-4 text-center font-extrabold text-ink no-underline";
 
 /**
- * Landing page, calm and centred: "ביחד לדורות" with the branch label, the tagline, two equal doors
+ * Landing page, calm and centred: "ביחד לדורות" with the branch label, two equal doors
  * (each with its partner's logo and colour), then the partners, the disclaimer and the privacy links.
  * Bilingual: Hebrew first for the residents, English for the students.
  */
@@ -18,10 +18,6 @@ export default function Landing() {
         <header className="flex flex-col items-center gap-4 text-center">
           <h1 className="sr-only">{BRAND.branchName.he} · {BRAND.branchName.en}</h1>
           <BrandLockup locale="he" variant="landing" priority />
-          <div className="space-y-1">
-            <p lang="he" dir="rtl" className="text-[22px] font-bold text-ink">{BRAND.tagline.he}</p>
-            <p lang="en" dir="ltr" className="text-[22px] text-ink">{BRAND.tagline.en}</p>
-          </div>
         </header>
         {/* two equal doors: stacked on phones, side by side from 640px */}
         <div className="grid w-full gap-4 sm:grid-cols-2">

@@ -29,19 +29,19 @@ python3 .claude/skills/ui-ux-pro-max/scripts/search.py \
 
 1. **Parent brand:** the "ביחד לדורות" logo, only through `components/BrandLockup.tsx`, always with
 2. **the branch label** "סניף EMIS" / "EMIS Branch" right beside it (headers) or under it (landing), in the same
-   size class as the tagline (`e2e/branding.spec.ts` fails on any page that shows the logo without it; a unit test
+   (`e2e/branding.spec.ts` fails on any page that shows the logo without it; a unit test
    checks no other component uses the logo file). Also on the tab icon, the share image and emails.
 3. **Partners:** EMIS and Ahuzat Tzahala, smaller, in a partners strip ("בשיתוף" / "In partnership with").
 4. **Footer disclaimer** on every page: not the whole organisation's official website (wording to be confirmed).
 
-Names, tagline, tab titles and disclaimer: `config/brand.ts`. Logo sizes and clear space: `config/logos.ts`.
+Names, tab titles and disclaimer: `config/brand.ts`. Logo sizes and clear space: `config/logos.ts`.
 
 | Place | Layout |
 | --- | --- |
-| Landing `/` | Logo (260px wide on phones, up to 320px) → "סניף EMIS" / "EMIS Branch" (30–34px, bold) → tagline in both languages (22px) → two equal doors, 96px+ tall (stacked on phones, side by side from 640px): residents with the Ahuzat Tzahala emblem and a maroon border, students with the EMIS logo and an orange border → footer: partners strip, disclaimer, privacy links |
+| Landing `/` | Logo (260px wide on phones, up to 320px) → "סניף EMIS" / "EMIS Branch" (30–34px, bold) → two equal doors, 96px+ tall (stacked on phones, side by side from 640px): residents with the Ahuzat Tzahala emblem and a maroon border, students with the EMIS logo and an orange border → footer: partners strip, disclaimer, privacy links |
 | Resident header | Not sticky. Lockup (logo + "סניף EMIS", links home) at the start, Ahuzat Tzahala emblem at the end; then "חזרה לדף הראשי" and "הגדל טקסט" |
-| Resident home | Hidden heading for screen readers, the tagline once (small), the three big buttons (96px+), nothing else |
-| Student header | Lockup (logo + "EMIS Branch", links home) at the start, EMIS logo at the end; then the menu (with "Home") |
+| Resident home | Hidden heading for screen readers, then the three big buttons (96px+), nothing else (no description line, owner's request) |
+| Student header | Lockup (logo + "EMIS Branch", links home) at the start, EMIS logo at the end; then "← Back to main page" (to the landing page) and the menu (with "Home") |
 | Footers | Light teal tint; links; partners strip on a white panel (the logos have white backgrounds); disclaimer |
 
 ## Colour tokens (`app/globals.css`)

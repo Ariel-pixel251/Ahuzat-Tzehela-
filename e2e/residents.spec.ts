@@ -3,10 +3,10 @@ import { contact, next, send } from "./helpers";
 
 // Full resident flows at 360px: everything by big buttons, one question per screen.
 
-test("the home page: the tagline once and three big buttons, no greeting and no 'contact us'", async ({ page }) => {
+test("the home page: three big buttons only, no greeting, no description line and no 'contact us'", async ({ page }) => {
   await page.goto("/residents");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("ביחד לדורות, סניף EMIS");
-  await expect(page.locator("main").getByText("סניף EMIS של ביחד לדורות, בשיתוף אחוזת צהלה")).toHaveCount(1);
+  await expect(page.getByText("סניף EMIS של ביחד לדורות, בשיתוף אחוזת צהלה")).toHaveCount(0);
   const buttons = page.locator("main ul a");
   await expect(buttons).toHaveText(["מה קורה השבוע?", "עזרה עם הטלפון או המחשב", "פודקאסט"]);
   await expect(page.getByText(/צרו איתי קשר|בקשו שאתקשר/)).toHaveCount(0);

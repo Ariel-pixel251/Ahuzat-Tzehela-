@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandLockup } from "@/components/BrandLockup";
 import { PartnerLogo, PartnersStrip } from "@/components/Logos";
 import { Nav } from "@/components/students/Nav";
+import { buttonClass } from "@/components/ui";
 import { BRAND } from "@/config/brand";
 import { LOGO_SPACING } from "@/config/logos";
 import { studentsText as t } from "@/lib/i18n";
@@ -29,7 +30,12 @@ export default function StudentsLayout({ children }: { children: React.ReactNode
           <PartnerLogo name="emis" place="header" locale="en" priority />
         </div>
         <div className="no-print bg-sand">
-          <div className="mx-auto max-w-4xl px-4 py-2">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2">
+            {/* back to the landing page (where you choose student or resident) */}
+            <Link href="/" className={`${buttonClass.small} min-h-11 gap-2 bg-white`}>
+              <span aria-hidden="true">←</span>
+              {t.backToMain}
+            </Link>
             <Nav items={nav} label={t.nav.label} />
           </div>
         </div>

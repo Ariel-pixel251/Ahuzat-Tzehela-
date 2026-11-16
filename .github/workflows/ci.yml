@@ -8,9 +8,11 @@ on:
 permissions:
   contents: read
 
+# runners pinned to Ubuntu 24.04: ubuntu-latest moved to 26.04, where Playwright 1.56 can't install
+# its browser yet ("Playwright does not support chromium on ubuntu26.04-x64")
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     # a real Postgres for the driver test (tests/postgres-driver.test.ts): PGlite can't show every
     # protocol problem that Supabase's pooler causes
@@ -54,7 +56,7 @@ jobs:
           retention-days: 7
 
   dependencies:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +70,7 @@ jobs:
       - run: npm audit --audit-level=high || echo "::warning::npm audit found issues in development-only packages (see the log above)"
 
   secrets:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

@@ -210,7 +210,7 @@ These rules win over anything else for `/residents`:
 2. EMIS and Ahuzat Tzahala are **partners**, shown smaller in a partners strip ("בשיתוף" / "In partnership with").
 3. Every footer carries a disclaimer that this is not the whole organisation's official website.
 
-Names, the tagline, tab titles and the disclaimer are in `config/brand.ts`. The originals of the logos are in
+Names, tab titles and the disclaimer are in `config/brand.ts`. The originals of the logos are in
 `assets/logos/` (see its README); the site uses the copies in `public/logos/`. Sizes, clear space and alt text are
 in `config/logos.ts`. The brand colours are measured from the logo files with `node scripts/extract-logo-colors.mjs`
 (→ `design/logo-colors.json`, used in `app/globals.css`). The tab icons, the share image (`public/og.png`) and
