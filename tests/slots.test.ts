@@ -3,9 +3,12 @@ import { listMessages } from "@/lib/db/misc";
 import * as slots from "@/lib/db/slots";
 import { acceptConduct, upsertStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
-import { blockDateAndCancel, bookDigital, cancelSlotAndNotify, updateSlotAndNotify, volunteerForSlot } from "@/lib/domain";
+import { blockDateAndCancel, bookDigital, cancelSlotAndNotify, cancelVolunteerByToken, sendSlotReminders, updateSlotAndNotify, volunteerForSlot } from "@/lib/domain";
 import { setSetting } from "@/lib/db/misc";
 import { testDb } from "./helpers/db";
+import { captureEmails } from "./helpers/emails";
+
+const emails = captureEmails();
 
 let db: Db;
 beforeEach(async () => {
@@ -119,10 +122,10 @@ describe("student volunteers", () => {
     const id = (await slots.createSlot(db, slotInput()))!;
     const s = await student(1);
     expect(await volunteerForSlot(db, id, s, BASE)).toBe("pending");
-    const [mine] = await slots.listStudentSlots(db, s.id);
-    expect(mine.volunteer_status).toBe("pending");
-    expect(await slots.approveVolunteer(db, mine.volunteer_id)).toBe(true);
-    expect((await slots.listStudentSlots(db, s.id))[0].volunteer_status).toBe("confirmed");
+    const [mine] = (await slots.listVolunteersForAdmin(db)).filter((v) => v.student_id === s.id);
+    expect(mine.status).toBe("pending");
+    expect(await slots.approveVolunteer(db, mine.id)).toBe(true);
+    expect((await slots.getVolunteer(db, mine.id))?.status).toBe("confirmed");
   });
 
   test("students can cancel their own place only before the cutoff", async () => {
@@ -132,9 +135,9 @@ describe("student volunteers", () => {
     const other = await student(2);
     await slots.volunteer(db, soon, s.id, { autoApprove: true });
     await slots.volunteer(db, later, s.id, { autoApprove: true });
-    const mine = await slots.listStudentSlots(db, s.id);
-    const soonPlace = mine.find((m) => m.id === soon)!.volunteer_id;
-    const laterPlace = mine.find((m) => m.id === later)!.volunteer_id;
+    const mine = (await slots.listVolunteersForAdmin(db)).filter((v) => v.student_id === s.id);
+    const soonPlace = mine.find((m) => m.slot_id === soon)!.id;
+    const laterPlace = mine.find((m) => m.slot_id === later)!.id;
     // within 48 hours of the slot: too late (cutoff 48h)
     expect(await slots.cancelOwnVolunteering(db, soonPlace, s.id, 48)).toBe(false);
     // someone else's place: never
@@ -143,48 +146,55 @@ describe("student volunteers", () => {
   });
 });
 
-describe("what a volunteer sees about residents", () => {
-  async function setup(daysAhead: number) {
-    const id = (await slots.createSlot(db, slotInput({ slot_date: inDays(daysAhead) })))!;
-    await slots.bookSlot(db, id, booking(1), { staff: true });
+describe("cancel links for student volunteers", () => {
+  test("the sign-up email has a cancel link; the token works once and only before the cutoff", async () => {
+    const later = (await slots.createSlot(db, slotInput({ slot_date: inDays(5) })))!;
     const s = await student(1);
-    await slots.volunteer(db, id, s.id, { autoApprove: true });
-    return { id, s };
-  }
-
-  test("first name and need only; never the surname", async () => {
-    const { s } = await setup(5);
-    const [r] = await slots.listResidentsForVolunteer(db, s.id);
-    expect(r).toMatchObject({ first_name: "Rivka", needs: ["whatsapp"], phone: null });
-    expect(JSON.stringify(r)).not.toContain("Cohen");
+    expect(await volunteerForSlot(db, later, s, BASE)).toBe("confirmed");
+    const link = emails.join("\n").match(/students\/digital-support\/cancel\?token=([A-Za-z0-9_-]+)/);
+    expect(link).toBeTruthy();
+    const token = link![1];
+    // only the hash is stored
+    const [row] = await db.query<{ manage_token_hash: string }>(`select manage_token_hash from digital_volunteers where student_id = $1`, [s.id]);
+    expect(row.manage_token_hash).not.toBe(token);
+    expect(await cancelVolunteerByToken(db, "x".repeat(43))).toBe("invalid");
+    expect(await cancelVolunteerByToken(db, token)).toBe("cancelled");
+    expect(await cancelVolunteerByToken(db, token)).toBe("invalid");
   });
 
-  test("the phone appears only after the code of conduct AND within 48 hours of the slot", async () => {
-    const far = await setup(5);
-    await acceptConduct(db, far.s.id);
-    expect((await slots.listResidentsForVolunteer(db, far.s.id))[0].phone).toBeNull();
-
-    db = await testDb();
-    const near = await setup(1);
-    expect((await slots.listResidentsForVolunteer(db, near.s.id))[0].phone).toBeNull();
-    await acceptConduct(db, near.s.id);
-    expect((await slots.listResidentsForVolunteer(db, near.s.id))[0].phone).toBe("0501234501");
+  test("too close to the slot, the link says to tell a leader instead", async () => {
+    const soon = (await slots.createSlot(db, slotInput({ slot_date: inDays(1) })))!;
+    const s = await student(1);
+    await volunteerForSlot(db, soon, s, BASE);
+    await setSetting(db, "student_cancel_cutoff_hours", 72);
+    const token = emails.join("\n").match(/cancel\?token=([A-Za-z0-9_-]+)/)![1];
+    expect(await cancelVolunteerByToken(db, token)).toBe("too_late");
   });
+});
 
-  test("never for other slots, and not while the student's place is still pending", async () => {
-    const { s } = await setup(1);
+describe("what a volunteer is told about residents", () => {
+  test("the day-before reminder has residents' first names and needs, never surnames or phone numbers", async () => {
+    const id = (await slots.createSlot(db, slotInput({ slot_date: inDays(1) })))!;
+    await slots.bookSlot(db, id, booking(1, { needs: ["whatsapp", "banking"] }), { staff: true });
+    const s = await student(1);
     await acceptConduct(db, s.id);
-    // another slot with a resident, where this student is not a helper
-    const other = (await slots.createSlot(db, slotInput({ slot_date: inDays(1), start_time: "18:00", end_time: "19:00" })))!;
-    await slots.bookSlot(db, other, booking(2), { staff: true });
-    const seen = await slots.listResidentsForVolunteer(db, s.id);
-    expect(seen).toHaveLength(1);
-    expect(seen.map((r) => r.phone)).not.toContain("0501234502");
+    await volunteerForSlot(db, id, s, BASE);
+    emails.length = 0;
+    expect(await sendSlotReminders(db)).toBe(2);
+    const reminder = emails.find((m) => m.includes("To: s1@emis.test"))!;
+    expect(reminder).toContain("Rivka: WhatsApp, Online banking");
+    expect(reminder).not.toContain("Cohen");
+    expect(reminder).not.toMatch(/050-?123-?4501/);
+    // once only
+    expect(await sendSlotReminders(db)).toBe(0);
+  });
 
-    const pendingStudent = await student(2);
-    await acceptConduct(db, pendingStudent.id);
-    await slots.volunteer(db, other, pendingStudent.id, { autoApprove: false });
-    expect((await slots.listResidentsForVolunteer(db, pendingStudent.id))[0].phone).toBeNull();
+  test("the reminder query has no phone numbers at all", async () => {
+    const id = (await slots.createSlot(db, slotInput({ slot_date: inDays(1) })))!;
+    await slots.bookSlot(db, id, booking(1), { staff: true });
+    const [r] = await slots.listResidentsForReminder(db, id);
+    expect(r).toMatchObject({ first_name: "Rivka" });
+    expect(JSON.stringify(r)).not.toContain("0501234501");
   });
 });
 

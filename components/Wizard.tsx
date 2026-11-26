@@ -7,11 +7,10 @@ import { residentsText as t, sharedText } from "@/lib/i18n";
 import { formatPhone, normalizePhone } from "@/lib/phone";
 import { HONEYPOT, type ActionState } from "@/lib/form";
 import { CheckIcon } from "./icons";
-import { bookedSlotLine } from "@/lib/slot-text";
 import { buttonClass } from "./ui";
 
-// Resident forms: one question per screen, big choice buttons, a review screen, then a calm
-// confirmation with the request code. Nothing times out, nothing is cleared.
+// The report-a-problem form: one question per screen, big choice buttons, a review screen, then a
+// calm confirmation. Nothing times out, nothing is cleared. (Sign-ups use components/residents/SignUp.tsx.)
 
 /** A choice; `detail` is a second line (e.g. places left), `disabled` can't be chosen (e.g. full). */
 export type WizardOption = { value: string; label: string; detail?: string; disabled?: boolean };
@@ -102,7 +101,6 @@ export function Wizard({
   hidden = {},
   done,
   doneWaitlist,
-  doneDetail,
   showCode = true,
   privacyHref = "/residents/privacy",
 }: {
@@ -111,8 +109,6 @@ export function Wizard({
   hidden?: Record<string, string>;
   done: string;
   doneWaitlist?: string;
-  /** an extra line on the confirmation, from the server's answer: "slot" shows the booked slot */
-  doneDetail?: "slot";
   showCode?: boolean;
   privacyHref?: string;
 }) {
@@ -185,7 +181,6 @@ export function Wizard({
           {t.wizard.thanks}
         </h2>
         <p className="mt-3 text-xl">{state.waitlist && doneWaitlist ? doneWaitlist : done}</p>
-        {doneDetail === "slot" && bookedSlotLine(state.data) && <p className="mt-3 text-2xl font-extrabold">{bookedSlotLine(state.data)}</p>}
         {showCode && state.code && (
           <div className="mx-auto mt-6 max-w-sm rounded-xl border-2 border-ink bg-white p-4">
             <p>{t.wizard.codeLabel}</p>

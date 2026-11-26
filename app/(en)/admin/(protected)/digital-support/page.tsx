@@ -144,6 +144,16 @@ export default async function AdminDigitalSupport() {
               <p className="font-bold">{v.student_name}</p>
               <p>{v.student_email}</p>
               {v.student_phone && <p dir="ltr" className="text-start">{formatPhone(v.student_phone)}</p>}
+              <p className="text-sm">
+                {v.age_group === "under-18" ? "Under 18" : v.age_group === "18-plus" ? "18 or older" : "Age not given"}
+                {v.age_group === "under-18" && v.guardian_name && (
+                  <>
+                    {" · Guardian: "}
+                    {v.guardian_name}
+                    {v.guardian_phone && <bdi dir="ltr"> {formatPhone(v.guardian_phone)}</bdi>}
+                  </>
+                )}
+              </p>
             </div>,
             <Badge key="st" tone={v.status === "confirmed" ? "ok" : "warn"}>{v.status}</Badge>,
             active ? (

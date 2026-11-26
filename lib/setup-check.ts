@@ -50,15 +50,17 @@ async function checkDatabase(): Promise<Check[]> {
       },
     ];
   }
-  let row: { functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean; callbacks_removed: boolean };
+  let row: { functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean; callbacks_removed: boolean; simple_signup: boolean };
   try {
     const db = await getDb();
     // one query proves the connection, the tables (digital_slots), the functions (hit_rate_limit),
     // and whether tables from before the 2026 rewrite are still there
-    [row] = await db.query<{ functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean; callbacks_removed: boolean }>(
+    [row] = await db.query<{ functions: boolean; schema: boolean; old: boolean; slots: number; podcast_times: boolean; callbacks_removed: boolean; simple_signup: boolean }>(
       `select to_regproc('public.hit_rate_limit') is not null as functions,
               to_regproc('public.podcast_join') is not null as podcast_times,
               to_regclass('public.callback_requests') is null as callbacks_removed,
+              exists (select 1 from information_schema.columns
+                       where table_schema = 'public' and table_name = 'digital_volunteers' and column_name = 'manage_token_hash') as simple_signup,
               to_regclass('public.digital_slots') is not null as schema,
               to_regclass('public.lesson_topics') is not null or to_regclass('public.digital_requests') is not null as old,
               case when to_regclass('public.digital_slots') is null then 0
@@ -103,15 +105,25 @@ async function checkDatabase(): Promise<Check[]> {
       },
     ];
   }
+  if (!row.simple_signup) {
+    return [
+      {
+        name: "Database update (simple sign-up)",
+        status: "bad",
+        detail: "The database is missing the simple sign-up update, so students can't sign up from the slot cards and podcast times can't be saved.",
+        fix: "In Supabase → SQL Editor → New query, paste supabase/migrations/0004_simple_signup.sql from GitHub and click Run (once).",
+      },
+    ];
+  }
   const approval = Boolean(await getSetting(await getDb(), "require_helper_approval", false).catch(() => false));
   return [
     { name: "Database", status: "ok", detail: "Connected, and the tables are set up." },
     studentEmailDomains().length || approval
-      ? { name: "Residents' phone numbers", status: "ok", detail: "Protected by school-email sign-in or leader approval." }
+      ? { name: "Student volunteers", status: "ok", detail: "Only school email addresses can sign up, or a leader approves each helper." }
       : {
-          name: "Residents' phone numbers",
+          name: "Student volunteers",
           status: "warn",
-          detail: "Anyone with any email can sign in as a student, volunteer for a slot and (48 hours before it) see the residents' phone numbers.",
+          detail: "Anyone with any email address can sign up as a student helper (students never see residents' phone numbers).",
           fix: "Add STUDENT_EMAIL_DOMAINS in Vercel (the school's email domain, e.g. em-is.org) and redeploy, or turn on helper approval in /admin → Digital support.",
         },
     row.slots > 0
@@ -242,7 +254,7 @@ async function checkEmail(): Promise<Check> {
   return {
     name,
     status: "warn",
-    detail: "No email service is set up: confirmations aren't emailed, and students can't get sign-in links for digital support.",
+    detail: "No email service is set up: students don't get their confirmations, cancel links and reminders.",
     fix: "Easiest, with no domain: a Gmail account with an app password. In Vercel add SMTP_USER (the Gmail address) and SMTP_PASSWORD (the app password), then redeploy.",
   };
 }

@@ -105,7 +105,7 @@ beforeAll(async () => {
   }))!;
   await podcast.createPodcastTimes(
     db,
-    { time_date: new Date(Date.now() + 6 * 86_400_000).toISOString().slice(0, 10), start_time: "16:00", end_time: "17:00", place_he: "בספרייה", place_en: null, pairs: 50 },
+    { time_date: new Date(Date.now() + 6 * 86_400_000).toISOString().slice(0, 10), start_time: "16:00", end_time: "17:00", place_he: "בספרייה", place_en: null, resident_places: 50, student_places: 50 },
     null,
   );
   podcastTimeId = (await podcast.listUpcomingTimes(db))[0].id;
@@ -120,22 +120,24 @@ const FORMS: { name: string; action: Action; valid: () => Record<string, string 
   {
     name: "resident: book digital support",
     action: residents.bookHelpSlot,
-    valid: () => ({ slot: slotId, needs: ["phone"], needs_other: "", name: "Rivka Cohen", phone: `050${String(1000000 + ip).slice(-7)}`, email: "" }),
+    valid: () => ({ slot: slotId, needs: ["phone"], name: "Rivka Cohen", phone: `050${String(1000000 + ip).slice(-7)}` }),
   },
   {
     name: "resident: register for an event",
     action: residents.registerResidentForEvent,
-    valid: () => ({ event: event.key, attendees: "1", languages: ["he"], other_language: "", name: "Rivka", phone: `052${String(1000000 + ip).slice(-7)}`, email: "" }),
+    valid: () => ({ event: event.key, attendees: "1", languages: ["he"], name: "Rivka", phone: `052${String(1000000 + ip).slice(-7)}` }),
   },
   {
     name: "resident: podcast",
     action: residents.joinPodcastAsResident,
-    valid: () => ({ topics: ["history"], language: "he", time: podcastTimeId, name: "Rivka", phone: `053${String(1000000 + ip).slice(-7)}`, email: "" }),
+    valid: () => ({ language: "he", time: podcastTimeId, name: "Rivka", phone: `053${String(1000000 + ip).slice(-7)}` }),
   },
   { name: "resident: report a problem", action: residents.reportProblemAsResident, valid: () => ({ message: "Something happened", name: "", phone: "" }) },
   { name: "resident: status lookup", action: residents.checkStatus, valid: () => ({ phone: "0529998877", code: "1234" }) },
   { name: "resident: cancel booking link", action: residents.cancelHelpByToken, valid: () => ({ token: "a".repeat(43) }) },
   { name: "resident: cancel registration link", action: residents.cancelRegistrationByToken, valid: () => ({ token: "a".repeat(43), locale: "he" }) },
+  { name: "resident: cancel podcast link", action: residents.cancelPodcastByToken, valid: () => ({ token: "a".repeat(43) }) },
+  { name: "resident: cancel with code (status lookup)", action: residents.cancelWithCode, valid: () => ({ phone: "0529998877", code: "1234" }) },
   {
     name: "student: register for an event",
     action: students.registerStudentForEvent,
@@ -153,19 +155,23 @@ const FORMS: { name: string; action: Action; valid: () => Record<string, string 
     }),
   },
   {
-    name: "student: podcast",
-    action: students.joinPodcastAsStudent,
-    valid: () => ({ name: "Dana", email: `p${ip}@emis.test`, phone: "", topics: ["music"], language: "en", time: podcastTimeId, consent: "on" }),
+    name: "student: podcast time card",
+    action: students.signUpForPodcastTime,
+    valid: () => ({ time: podcastTimeId, name: "Dana", email: `p${ip}@emis.test`, topic: "music", language: "en", consent: "on" }),
   },
-  { name: "student: sign-in link", action: students.requestSignInLink, valid: () => ({ name: "Dana", email: `s${ip}@emis.test`, phone: "", consent: "on" }) },
+  {
+    name: "student: digital support card",
+    action: students.signUpForSlot,
+    valid: () => ({ slot: slotId, name: "Dana", email: `s${ip}@emis.test`, under_18: "on", guardian_name: "Parent", guardian_phone: "0501112233", consent: "on" }),
+  },
   { name: "student: report a problem", action: students.reportProblemAsStudent, valid: () => ({ message: "Help", name: "", contact: "", consent: "on" }) },
-  { name: "student: pair request", action: students.askToPair, valid: () => ({ token: "a".repeat(43), target: slotId }) },
-  { name: "student: volunteer", action: students.volunteerForSlotAction, valid: () => ({ slot: slotId }) },
+  { name: "student: cancel slot link", action: students.cancelSlotPlaceByToken, valid: () => ({ token: "a".repeat(43) }) },
+  { name: "student: cancel podcast link", action: students.leavePodcast, valid: () => ({ token: "a".repeat(43) }) },
 ];
 
 describe("injection and XSS payloads in every field", () => {
   test("the valid version of each form is accepted (so the payloads below reach the database)", async () => {
-    const accepted = FORMS.filter((f) => !/status lookup|link|pair request|volunteer/.test(f.name));
+    const accepted = FORMS.filter((f) => !/status lookup|link/.test(f.name));
     for (const form of accepted) {
       const res = await form.action(null, fd(form.valid()));
       expect(res?.ok, `${form.name}: ${JSON.stringify(res)}`).toBe(true);
@@ -192,10 +198,10 @@ describe("injection and XSS payloads in every field", () => {
 
   test("free text is stored exactly as typed (parameters, not SQL) and never executed", async () => {
     const payload = "'; DROP TABLE digital_bookings;-- <script>alert(1)</script>";
-    const res = await residents.bookHelpSlot(null, fd({ slot: slotId, needs: ["other"], needs_other: payload, name: "Avi Cohen", phone: "0587654321", email: "" }));
+    const res = await residents.reportProblemAsResident(null, fd({ message: payload, name: "Avi Cohen", phone: "0587654321" }));
     expect(res?.ok).toBe(true);
-    const [row] = await db.query<{ needs_other: string }>(`select needs_other from digital_bookings where phone = '0587654321'`);
-    expect(row.needs_other).toBe(payload);
+    const [row] = await db.query<{ message: string }>(`select message from problem_reports where contact = '0587654321'`);
+    expect(row.message).toBe(payload);
     expect(await tableCount()).toBe(tables);
   });
 

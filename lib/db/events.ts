@@ -34,22 +34,22 @@ export type Registration = RegistrationInput & {
 };
 
 export type RegisterResult =
-  | { status: "confirmed" | "waitlist"; id: string; code: string; token: string | null }
+  | { status: "confirmed" | "waitlist"; id: string; code: string; token: string }
   | { status: "duplicate" };
 
 /**
  * Registers for a calendar event. With a capacity, people beyond it go on the waiting list.
- * An edit link token is created only when there is an email to send it to.
+ * The cancel token (only its hash is stored) is emailed, or kept on a resident's confirmation screen.
  */
 export async function registerForEvent(db: Db, input: RegistrationInput, capacity: number | null): Promise<RegisterResult> {
   const code = newCode();
-  const token = input.email ? newToken() : null;
+  const token = newToken();
   const [row] = await db.query<{ r_id: string | null; r_status: string }>(
     `select r_id, r_status from register_for_event($1::text::jsonb, $2::int)`,
-    [JSON.stringify({ ...input, code, manage_token_hash: token?.hash ?? null }), capacity],
+    [JSON.stringify({ ...input, code, manage_token_hash: token.hash }), capacity],
   );
   if (row.r_status === "duplicate" || !row.r_id) return { status: "duplicate" };
-  return { status: row.r_status as "confirmed" | "waitlist", id: row.r_id, code, token: token?.raw ?? null };
+  return { status: row.r_status as "confirmed" | "waitlist", id: row.r_id, code, token: token.raw };
 }
 
 /** Cancels and promotes from the waiting list. Returns the promoted registrations. */

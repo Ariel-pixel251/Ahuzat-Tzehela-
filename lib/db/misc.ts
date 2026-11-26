@@ -108,6 +108,16 @@ export async function lookupStatus(db: Db, phone: string, code: string): Promise
   return items;
 }
 
+/** The active sign-ups behind a phone and code (to cancel them from the status page). */
+export async function signUpsByCode(db: Db, phone: string, code: string) {
+  const [digital, events, podcast] = await Promise.all([
+    db.query<{ id: string }>(`select id from digital_bookings where phone = $1 and code = $2 and status <> 'cancelled'`, [phone, code]),
+    db.query<{ id: string }>(`select id from event_registration_list where phone = $1 and code = $2 and status <> 'cancelled'`, [phone, code]),
+    db.query<{ id: string }>(`select id from podcast_participants where phone = $1 and code = $2 and active`, [phone, code]),
+  ]);
+  return { digital: digital.map((r) => r.id), events: events.map((r) => r.id), podcast: podcast.map((r) => r.id) };
+}
+
 // ---------------------------------------------------------------- problem reports
 
 export type ProblemReport = {

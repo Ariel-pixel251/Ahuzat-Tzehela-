@@ -4,7 +4,7 @@ Where the project stands, so the next session (human or Claude) can pick up from
 Update this file whenever something is set up, changed or decided. **Never write passwords, keys or
 connection strings here**; they live only in Vercel and in `.env.local`.
 
-_Last updated: 2026-10-20_
+_Last updated: 2026-11-26_
 
 ## Live
 
@@ -30,8 +30,8 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - Address changed to `https://beyachad-ledorot.vercel.app` (2026-10-20). Needs `SITE_URL` = that address in Vercel, the Supabase
   Site URL/redirect above, and a redeploy. Use only this address on posters, QR codes and messages.
 - Podcast times (owner's request, 2026-10-22, replacing the hour scroll wheels): the admin creates them on
-  /admin → Podcast (once or weekly, with a number of pairs); residents and students choose one when they sign up,
-  or "arrange by message". A pair who chose the same time meets then. Needs `0002_podcast_times.sql` run in Supabase.
+  /admin → Podcast; people choose one. A pair who chose the same time meets then. Needs `0002_podcast_times.sql`
+  run in Supabase. (Changed by "Simple sign-up" below: places per side, no "arrange by message".)
 - Logos (owner's request, 2026-10-22): EMIS, Ahuzat Tzahala and "ביחד לדורות" on the landing page, in both portals'
   header (linking home) and footer, in emails (from `NEXT_PUBLIC_SITE_URL`), the tab icon and the share image.
   Sizes and alt text in `config/logos.ts`. Permission note in the README still to be confirmed by the owner.
@@ -43,6 +43,18 @@ Neither Vercel nor Supabase has an Israeli region; Frankfurt is the closest.
 - "Contact us" removed (owner's request, 2026-10-22): no call-back button, page, table or admin list. Residents'
   home has 3 buttons. The only contact is the organisation's email in the privacy notices (`contactEmail` in
   `config/brand.ts`, still empty). Needs `0003_remove_callback_requests.sql` run in Supabase.
+- Simple sign-up (owner's request, 2026-11): the team creates every slot and people only pick one; nobody phones
+  anyone to arrange anything.
+  - **Residents:** podcast, help and events use the same two screens ("מתי נוח לך?", then name and phone), with a
+    "נרשמת! ✓" screen, the 4-digit code (only to cancel) and a cancel button. Full and past slots are hidden.
+    No dropdowns, no email, no "arrange by message".
+  - **Students:** they sign up inside the slot or podcast-time card (name, school email; for digital support also
+    age, guardian, and privacy plus the code of conduct), with no account. They get a cancel link by email, and
+    a day-before reminder with residents' first names and needs, never phone numbers. Sign-in, "My sign-ups" and
+    the podcast page were removed; old links redirect.
+  - **Admin:** podcast times work like slots (once or weekly; places for residents and for students; open/close;
+    cancel with notice). Each time lists who chose it and who is paired. A 1+1 time pairs automatically.
+  - Needs `0004_simple_signup.sql` run in Supabase **before merging**.
 
 ## Lessons from the first deploy
 
@@ -77,8 +89,9 @@ schema was rewritten, so the live database must be reset once (no real data yet)
 
 - [ ] **Before merging the scope-change PR:** Supabase → SQL Editor → run `supabase/reset.sql` (deletes the old
       tables), then run `supabase/migrations/0001_init.sql`. Then merge; `/admin/setup` should be all green.
-- [ ] In Supabase → SQL Editor, run `0002_podcast_times.sql` (before merging PR #20) and
-      `0003_remove_callback_requests.sql` (before merging the logos PR), each once; `/admin/setup` checks both.
+- [ ] In Supabase → SQL Editor, run `0002_podcast_times.sql` (before merging PR #20),
+      `0003_remove_callback_requests.sql` (before merging the logos PR) and `0004_simple_signup.sql` (before merging
+      the simple sign-up PR), each once; `/admin/setup` checks all three.
 - [ ] Set `NEXT_PUBLIC_SITE_URL=https://beyachad-ledorot.vercel.app` in Vercel (email logos, share image).
 - [ ] Fill in `contactEmail` in `config/brand.ts`; confirm the logo permission note in the README.
 - [ ] Confirm with "ביחד לדורות" that the branch may use its name and logo, and check the disclaimer wording
@@ -88,7 +101,8 @@ schema was rewritten, so the live database must be reset once (no real data yet)
 - [ ] Turn on two-factor login on GitHub, Vercel, Supabase (and Resend if used).
 - [ ] Fill in the organisation name in `legal/` and work through `LEGAL_TODO.md`; get the
       school's okay before real users sign up.
-- [ ] Set `STUDENT_EMAIL_DOMAINS=em-is.org` in Vercel (only school emails can sign in as students).
+- [ ] Set `STUDENT_EMAIL_DOMAINS=em-is.org` in Vercel (only school emails can sign up as students; it's now the
+      only identity check, and without it every helper waits for a leader's approval).
 - [ ] Email: `SMTP_USER` / `SMTP_PASSWORD` (Gmail app password) in Vercel and the same in Supabase's custom SMTP.
 - [ ] Keep the Google Calendar public; add the events from `notes/meeting-notes.md` with tags (README).
 - [ ] Add leaders to `ADMIN_EMAILS` and to `/admin/leaders`.

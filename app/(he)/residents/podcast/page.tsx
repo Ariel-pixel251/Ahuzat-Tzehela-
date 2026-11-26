@@ -1,22 +1,33 @@
 import type { Metadata } from "next";
-import { joinPodcastAsResident } from "@/app/actions/residents";
-import { Wizard } from "@/components/Wizard";
+import { cancelPodcastByToken, joinPodcastAsResident } from "@/app/actions/residents";
+import { SignUp } from "@/components/residents/SignUp";
+import { Notice } from "@/components/ui";
 import { listUpcomingTimes } from "@/lib/db/podcast";
-import { residentsText as t } from "@/lib/i18n";
+import { residentsText as t, sharedText } from "@/lib/i18n";
+import { podcastChoices, podcastExtras } from "@/lib/resident-signup";
 import { tryDb } from "@/lib/server";
-import { podcastSteps } from "@/lib/wizard-steps";
 
 export const metadata: Metadata = { title: t.pages.podcast.title };
 export const dynamic = "force-dynamic";
 
+/** Join the podcast: pick one of the team's times, then name and phone (and the language). */
 export default async function PodcastPage() {
   const db = await tryDb();
-  const times = db ? await listUpcomingTimes(db) : [];
   return (
     <>
       <h1 className="text-4xl font-extrabold">{t.pages.podcast.title}</h1>
       <p className="mb-6 mt-3 text-xl">{t.pages.podcast.intro}</p>
-      <Wizard steps={podcastSteps(times)} action={joinPodcastAsResident} done={t.confirm.podcast} doneDetail="slot" />
+      {!db ? (
+        <Notice kind="warn" className="text-xl">{sharedText.he.errors.unavailable}</Notice>
+      ) : (
+        <SignUp
+          slots={podcastChoices(await listUpcomingTimes(db))}
+          slotField="time"
+          extras={podcastExtras}
+          action={joinPodcastAsResident}
+          cancelAction={cancelPodcastByToken}
+        />
+      )}
     </>
   );
 }

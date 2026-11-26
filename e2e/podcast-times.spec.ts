@@ -1,57 +1,50 @@
 import { expect, test } from "@playwright/test";
-import { adminSignIn, contact, createPodcastTime, inDays, next, send } from "./helpers";
+import { adminSignIn, createPodcastTime, inDays, residentSignUp, studentCardSignUp } from "./helpers";
 
-// Podcast times: the admin creates them; residents and students choose one; a pair who chose the
-// same time meets then.
+// Podcast times work like digital support slots: the admin creates them (once or weekly), residents
+// and students pick one, and a time for one of each pairs them automatically.
 
-test("a resident and a student choose the admin's podcast time; pairing them sets the meeting", async ({ page }) => {
-  const date = inDays(12);
+test("an admin creates a weekly podcast time and it appears on both portals", async ({ page }) => {
+  const first = inDays(15);
+  const until = inDays(15 + 14);
   await adminSignIn(page);
-  await createPodcastTime(page, { date, start: "15:00", end: "16:00", place: "בחדר המוזיקה", placeEn: "Music room", pairs: 1 });
-  await expect(page.getByRole("region", { name: "Podcast times" }).getByText(/Music room/)).toBeVisible();
+  await createPodcastTime(page, { date: first, until, start: "13:00", end: "14:00", place: "בגינה", placeEn: "Garden", residents: 2, students: 2 });
+  const section = page.getByRole("region", { name: "Podcast times" });
+  await expect(section.locator("li").filter({ hasText: "Garden" })).toHaveCount(3);
 
-  // a resident chooses it
-  await page.goto("/residents/podcast");
-  await page.getByRole("button", { name: "מוזיקה" }).click();
-  await next(page);
-  await next(page);
-  const time = page.getByRole("radio", { name: /15:00 עד 16:00, בחדר המוזיקה/ });
-  await expect(time).toContainText("נשאר מקום אחד");
-  await time.click();
-  await next(page);
-  await contact(page, "רחל גולן", "053-777-1122");
-  await send(page);
-  await expect(page.getByRole("heading", { name: "תודה! קיבלנו." })).toBeVisible();
-  await expect(page.getByText(/15:00 עד 16:00, בחדר המוזיקה/)).toBeVisible();
-
-  // now it's full for residents: shown, but it can't be chosen
-  await page.goto("/residents/podcast");
-  await page.getByRole("button", { name: "מוזיקה" }).click();
-  await next(page);
-  await next(page);
-  await expect(page.getByRole("radio", { name: /15:00 עד 16:00, בחדר המוזיקה/ })).toContainText("מלא");
-  await expect(page.getByRole("radio", { name: /15:00 עד 16:00, בחדר המוזיקה/ })).toHaveAttribute("aria-disabled", "true");
-
-  // a student chooses the same time
   await page.goto("/students/podcast");
-  await page.getByLabel("Full name").fill("Yael Student");
-  await page.getByLabel("Email").fill("yael@emis.test");
-  await page.getByRole("button", { name: /Topics I'm interested in/ }).click();
-  await page.getByLabel("Music").check();
-  await page.getByLabel("When can you meet?").selectOption({ label: (await page.getByRole("option", { name: /Music room/ }).textContent())! });
-  await page.getByLabel(/I agree to the privacy notice/).check();
-  await page.getByRole("button", { name: "Submit" }).click();
-  await expect(page.getByText(/You're signed up!/)).toBeVisible();
+  await expect(page.locator("main li").filter({ hasText: "Garden" })).toHaveCount(3);
+  await page.goto("/residents/podcast");
+  await expect(page.getByRole("button", { name: /בשעה 13:00 · בגינה/ })).toHaveCount(3);
+});
 
-  // the admin sees both, pairs them without typing a meeting: it's set to the time they chose
+test("a student and a resident pick the same podcast time and show up as paired in admin", async ({ page }) => {
+  await adminSignIn(page);
+  await createPodcastTime(page, { date: inDays(12), start: "15:00", end: "16:00", place: "בחדר המוזיקה", placeEn: "Music room" });
+
+  await page.goto("/residents/podcast");
+  await residentSignUp(page, { slot: /בשעה 15:00 · בחדר המוזיקה/, name: "רחל גולן", phone: "053-777-1122" });
+  await expect(page.getByRole("heading", { name: /נרשמת!/ })).toBeVisible();
+  await expect(page.getByText(/נתראה ב.*בשעה 15:00, בחדר המוזיקה/)).toBeVisible();
+
+  // full for residents now: not shown at all
+  await page.goto("/residents/podcast");
+  await expect(page.getByRole("button", { name: /בחדר המוזיקה/ })).toHaveCount(0);
+
+  await page.goto("/students/podcast");
+  await studentCardSignUp(page.locator("main li", { hasText: "Music room" }), { name: "Yael Student", email: "yael@emis.test", topic: "Music" });
+
   await page.goto("/admin/podcast");
-  const row = page.getByRole("region", { name: "Podcast times" }).getByRole("row", { name: /Music room/ });
-  await expect(row).toContainText("1 of 1");
-  const pairForm = page.getByRole("region", { name: "Make a pair" });
-  await pairForm.getByLabel("Who").first().selectOption({ label: (await pairForm.getByRole("option", { name: /רחל גולן/ }).first().textContent())! });
-  await pairForm.getByLabel("Who").nth(1).selectOption({ label: (await pairForm.getByRole("option", { name: /Yael Student/ }).first().textContent())! });
-  await pairForm.getByRole("button", { name: "Make the pair" }).click();
-  await expect(page.getByText(/Paired/)).toBeVisible();
-  await page.goto("/admin/podcast");
-  await expect(page.getByText(new RegExp(`meets ${date} 15:00, בחדר המוזיקה`))).toBeVisible();
+  const card = page.getByRole("region", { name: "Podcast times" }).locator("li").filter({ hasText: "Music room" });
+  await expect(card).toContainText("Residents 1/1");
+  await expect(card).toContainText("Students 1/1");
+  await expect(card.getByText("paired with Yael Student")).toBeVisible();
+  await expect(card.getByText("paired with רחל גולן")).toBeVisible();
+  await expect(page.getByText(/meets \d{4}-\d\d-\d\d 15:00, בחדר המוזיקה/)).toBeVisible();
+
+  // cancelling the time tells both
+  await card.getByRole("button", { name: /Cancel/ }).click();
+  await expect(card.getByText("Cancelled", { exact: true })).toBeVisible();
+  await page.goto("/admin/messages");
+  await expect(page.getByText(/מועד הפודקאסט|בוטל/).first()).toBeVisible();
 });

@@ -10,7 +10,8 @@ import { formatDateTime, formatEventWhen, formatPodcastTime, formatSlot } from "
 import type { Locale } from "@/lib/i18n";
 import { notify, type Recipient } from "@/lib/notify";
 import { templates } from "@/lib/notify/templates";
-import { formatPhone } from "@/lib/phone";
+import { languageName } from "@/config/languages";
+import { DIGITAL_NEEDS, optionLabel } from "@/config/options";
 import { studentEmailDomains } from "@/lib/env";
 
 // Business logic shared by the portals and the admin screens.
@@ -27,7 +28,7 @@ export type EventPersonInput = Pick<
 >;
 
 export type RegisterEventResult =
-  | { status: "confirmed" | "waitlist"; code: string }
+  | { status: "confirmed" | "waitlist"; code: string; token: string }
   | { status: "duplicate" | "closed" | "not-registrable" | "blocked" };
 
 export async function registerEvent(
@@ -67,10 +68,26 @@ export async function registerEvent(
       when: formatEventWhen(event, locale),
       waitlist: res.status === "waitlist",
       code: res.code,
-      manageUrl: res.token ? `${baseUrl}/${portalPath(person.portal)}/manage/event?token=${res.token}` : null,
+      // the cancel link goes only to an inbox; residents cancel on their confirmation screen or with their code
+      manageUrl: person.email ? `${baseUrl}/${portalPath(person.portal)}/manage/event?token=${res.token}` : null,
     }),
   );
-  return { status: res.status, code: res.code };
+  return { status: res.status, code: res.code, token: res.token };
+}
+
+/** A resident cancels with their phone and code (status page): everything signed up under that code. */
+export async function cancelByCode(db: Db, phone: string, code: string, loadCalendar: () => Promise<CalendarData>) {
+  const found = await misc.signUpsByCode(db, phone, code);
+  for (const id of found.digital) await slots.cancelBooking(db, id);
+  if (found.events.length) {
+    const calendar = await loadCalendar();
+    for (const id of found.events) {
+      const reg = await events.getRegistration(db, id);
+      if (reg) await cancelEventRegistration(db, reg, calendar);
+    }
+  }
+  for (const id of found.podcast) await podcast.withdraw(db, id);
+  return found.digital.length + found.events.length + found.podcast.length;
 }
 
 /** Cancels a registration and tells anyone promoted from the waiting list. */
@@ -167,7 +184,7 @@ export async function bookDigital(db: Db, slotId: string, input: slots.BookingIn
         name: firstName(input.name),
         slot: formatSlot(slot, "he"),
         code: res.code,
-        manageUrl: res.token ? `${baseUrl}/residents/manage/help?token=${res.token}` : null,
+        manageUrl: input.email ? `${baseUrl}/residents/manage/help?token=${res.token}` : null,
       }),
     );
   }
@@ -183,12 +200,21 @@ export async function studentCancelCutoffHours(db: Db) {
   return Number.isFinite(n) && n >= 0 ? n : 24;
 }
 
-/** A student volunteers for a slot (atomically, within the number of helpers needed). */
+/** A cancel link for a student's place in a slot (a new token each time; only its hash is stored). */
+async function volunteerCancelUrl(db: Db, slotId: string, studentId: string, baseUrl: string) {
+  const token = await slots.newVolunteerCancelToken(db, slotId, studentId);
+  return token ? `${baseUrl}/students/digital-support/cancel?token=${token}` : null;
+}
+
+/**
+ * A student volunteers for a slot (atomically, within the number of helpers needed), then gets an
+ * email with when and where and a link to cancel.
+ */
 export async function volunteerForSlot(db: Db, slotId: string, s: { id: string; name: string; email: string | null; phone: string | null }, baseUrl: string) {
   if (await misc.isBlocked(db, s.phone, s.email)) return "blocked" as const;
-  // without a school-email rule anyone could sign in, so in production a leader then approves every helper
-  const openSignIn = studentEmailDomains().length === 0 && process.env.NODE_ENV === "production";
-  const result = await slots.volunteer(db, slotId, s.id, { autoApprove: !openSignIn && !(await helperApprovalRequired(db)) });
+  // without a school-email rule anyone could sign up, so in production a leader then approves every helper
+  const openSignUp = studentEmailDomains().length === 0 && process.env.NODE_ENV === "production";
+  const result = await slots.volunteer(db, slotId, s.id, { autoApprove: !openSignUp && !(await helperApprovalRequired(db)) });
   if (result === "confirmed" || result === "pending") {
     const slot = await slots.getSlot(db, slotId);
     if (slot) {
@@ -196,11 +222,19 @@ export async function volunteerForSlot(db: Db, slotId: string, s: { id: string; 
         name: firstName(s.name),
         slot: formatSlot(slot, "en"),
         pending: result === "pending",
-        url: `${baseUrl}/students/mine`,
+        cancelUrl: await volunteerCancelUrl(db, slotId, s.id, baseUrl),
       }));
     }
   }
   return result;
+}
+
+/** A student cancels their place with the link from their email, up to the cut-off before the slot. */
+export async function cancelVolunteerByToken(db: Db, rawToken: string) {
+  const v = await slots.getVolunteerByToken(db, rawToken);
+  if (!v || v.status === "cancelled") return "invalid" as const;
+  const cutoff = await studentCancelCutoffHours(db);
+  return (await slots.cancelOwnVolunteering(db, v.id, v.student_id, cutoff)) ? ("cancelled" as const) : ("too_late" as const);
 }
 
 /**
@@ -216,7 +250,7 @@ export async function adminAddVolunteer(db: Db, slotId: string, studentId: strin
         name: firstName(s.name),
         slot: formatSlot(slot, "en"),
         residents: names.map((n) => n.first_name),
-        url: `${baseUrl}/students/mine`,
+        cancelUrl: s.email ? await volunteerCancelUrl(db, slotId, studentId, baseUrl) : null,
       }));
     }
   }
@@ -232,7 +266,7 @@ export async function approveVolunteer(db: Db, volunteerId: string, baseUrl: str
       name: firstName(v.student_name),
       slot: formatSlot(slot, "en"),
       pending: false,
-      url: `${baseUrl}/students/mine`,
+      cancelUrl: v.student_email ? await volunteerCancelUrl(db, v.slot_id, v.student_id, baseUrl) : null,
     }));
   }
   return true;
@@ -290,12 +324,17 @@ export async function sendSlotReminders(db: Db) {
     const slot = await slots.getSlot(db, id);
     if (!slot) continue;
     for (const b of await slots.listBookingsNeedingReminder(db, id)) {
-      await notify(db, resident(b), templates.slotReminder("he", { name: firstName(b.name), slot: formatSlot(slot, "he") }));
+      await notify(db, resident(b), templates.slotReminder({ name: firstName(b.name), slot: formatSlot(slot, "he") }));
       await slots.markBookingReminded(db, b.id);
       sent++;
     }
+    // volunteers: the residents' first names and what they need (never their phone numbers)
+    const residents = (await slots.listResidentsForReminder(db, id)).map((r) => {
+      const needs = [...r.needs.filter((n) => n !== "other").map((n) => optionLabel(DIGITAL_NEEDS, n, "en")), r.needs_other].filter(Boolean);
+      return needs.length ? `${r.first_name}: ${needs.join(", ")}` : r.first_name;
+    });
     for (const v of await slots.listVolunteersNeedingReminder(db, id)) {
-      await notify(db, student(v), templates.slotReminder("en", { name: firstName(v.name), slot: formatSlot(slot, "en") }));
+      await notify(db, student(v), templates.volunteerReminder({ name: firstName(v.name), slot: formatSlot(slot, "en"), residents }));
       await slots.markVolunteerReminded(db, v.id);
       sent++;
     }
@@ -305,12 +344,15 @@ export async function sendSlotReminders(db: Db) {
 
 // ---------------------------------------------------------------- podcast
 
+export type JoinPodcastDomainResult = podcast.JoinPodcastResult | { status: "blocked" };
+
 /**
- * Sign up for the podcast, optionally at one of the team's times. Returns "blocked", or the
- * database's answer ("joined" with the request code, or why not: "duplicate" | "full" | "closed" | "not_found").
+ * Sign up for one of the team's podcast times. Returns the database's answer ("joined" with the
+ * request code and cancel token, or why not: "duplicate" | "full" | "closed" | "not_found"), or
+ * "blocked". A time for one resident and one student pairs them as soon as both have chosen it.
  */
-export async function joinPodcast(db: Db, input: podcast.ParticipantInput, baseUrl: string, { staff = false } = {}) {
-  if (await misc.isBlocked(db, input.phone, input.email)) return "blocked" as const;
+export async function joinPodcast(db: Db, input: podcast.ParticipantInput, baseUrl: string, { staff = false } = {}): Promise<JoinPodcastDomainResult> {
+  if (await misc.isBlocked(db, input.phone, input.email)) return { status: "blocked" };
   const res = await podcast.joinPodcastAt(db, input, { staff });
   if (res.status !== "joined") return res;
   const locale = localeOf(input.portal);
@@ -322,77 +364,75 @@ export async function joinPodcast(db: Db, input: podcast.ParticipantInput, baseU
       name: firstName(input.name),
       code: res.code,
       when: time ? formatPodcastTime(time, locale) : null,
-      // students pair themselves on their podcast page; residents are paired by the team
-      manageUrl: input.portal === "student" && res.token ? `${baseUrl}/students/podcast/manage?token=${res.token}` : null,
+      // the cancel link goes only to an inbox; residents cancel on their confirmation screen or with their code
+      cancelUrl: input.email ? `${baseUrl}/${portalPath(input.portal)}/podcast/cancel?token=${res.token}` : null,
     }),
   );
+  if (time) await autoPair(db, time.id);
   return res;
 }
 
-export async function requestPodcastPair(db: Db, fromId: string, toId: string) {
-  const result = await podcast.requestPair(db, fromId, toId);
-  if (result === "requested") {
-    const [from, to] = await Promise.all([podcast.getParticipant(db, fromId), podcast.getParticipant(db, toId)]);
-    if (from && to) {
-      await notify(db, to, templates.podcastPairRequest(localeOf(to.portal), { name: firstName(to.name), from: firstName(from.name) }));
-    }
-  }
-  if (result === "paired") await notifyPodcastPaired(db, fromId, toId);
-  return result;
+/** A time for one resident and one student: once both have chosen it, they are a pair. */
+async function autoPair(db: Db, timeId: string) {
+  const time = await podcast.getPodcastTime(db, timeId);
+  if (!time || time.resident_places !== 1 || time.student_places !== 1) return null;
+  const people = (await podcast.listTimePeople(db, timeId)).filter((p) => !p.pair_id);
+  const r = people.find((p) => p.portal === "resident");
+  const s = people.find((p) => p.portal === "student");
+  if (!r || !s) return null;
+  const pairId = await podcast.makePair(db, s.id, r.id, "participants");
+  if (pairId) await notifyPodcastPaired(db, pairId, s.id, r.id);
+  return pairId;
 }
 
-export async function respondPodcastRequest(db: Db, requestId: string, toId: string, accept: boolean) {
-  const pending = await podcast.listPendingRequests(db, toId);
-  const result = await podcast.respondToRequest(db, requestId, toId, accept);
-  const req = pending.find((p) => p.id === requestId);
-  if (result === "paired" && req) await notifyPodcastPaired(db, req.other_id, toId);
-  return result;
+/** Leaving the podcast with the cancel link or button (the partner, if any, stays signed up). */
+export async function leavePodcastByToken(db: Db, rawToken: string) {
+  const me = await podcast.getParticipantByToken(db, rawToken);
+  if (!me || !me.active) return false;
+  await podcast.withdraw(db, me.id);
+  return true;
 }
 
 /**
  * Admin: pair two people (signed up themselves or added by staff), optionally with when and where
- * they first meet. With `notify`, each is told who their partner is and when they meet.
+ * they first meet. With `notify`, each is told their partner's first name and when they meet.
  */
 export async function adminPairPodcast(db: Db, a: string, b: string, { meeting = null, notify: send = true }: { meeting?: podcast.Meeting | null; notify?: boolean } = {}) {
   const pairId = await podcast.makePair(db, a, b, "admin");
   if (!pairId) return null;
   if (meeting) await podcast.setPairMeeting(db, pairId, meeting);
-  // no meeting typed in: the time both chose (set by the database when pairing), if any
-  else meeting = await podcast.getPairMeeting(db, pairId);
-  if (send) {
-    const [pa, pb] = await Promise.all([podcast.getParticipant(db, a), podcast.getParticipant(db, b)]);
-    if (pa && pb) {
-      for (const [me, other] of [
-        [pa, pb],
-        [pb, pa],
-      ] as const) {
-        const locale = localeOf(me.portal);
-        await notify(db, me, templates.podcastPairedByAdmin(locale, {
-          name: firstName(me.name),
-          partner: firstName(other.name),
-          when: meeting ? formatDateTime(meeting.date, meeting.time, locale) : null,
-          place: meeting?.place ?? null,
-          // students get their partner's contact; residents are contacted by the team
-          partnerContact: locale === "en" ? [other.email, formatPhone(other.phone)].filter(Boolean).join(", ") : undefined,
-        }));
-      }
-    }
-  }
+  if (send) await notifyPodcastPaired(db, pairId, a, b);
   return pairId;
 }
 
-async function notifyPodcastPaired(db: Db, aId: string, bId: string) {
-  const [a, b] = await Promise.all([podcast.getParticipant(db, aId), podcast.getParticipant(db, bId)]);
+/** Tells both people who their partner is and when and where they meet. Never contact details. */
+async function notifyPodcastPaired(db: Db, pairId: string, aId: string, bId: string) {
+  const [a, b, meeting] = await Promise.all([podcast.getParticipant(db, aId), podcast.getParticipant(db, bId), podcast.getPairMeeting(db, pairId)]);
   if (!a || !b) return;
   for (const [me, other] of [
     [a, b],
     [b, a],
   ] as const) {
-    const contact = [other.email, formatPhone(other.phone)].filter(Boolean).join(", ");
-    await notify(
-      db,
-      me,
-      templates.podcastPaired(localeOf(me.portal), { name: firstName(me.name), partner: firstName(other.name), partnerContact: contact }),
-    );
+    const locale = localeOf(me.portal);
+    await notify(db, me, templates.podcastPaired(locale, {
+      name: firstName(me.name),
+      partner: firstName(other.name),
+      partnerLanguage: locale === "en" ? languageName(other.language, "en") : null,
+      when: meeting ? formatDateTime(meeting.date, meeting.time, locale) : null,
+      place: meeting?.place ?? null,
+    }));
   }
+}
+
+/** Admin: cancels a podcast time and tells everyone who had chosen it. Returns how many, or null. */
+export async function cancelPodcastTimeAndNotify(db: Db, timeId: string) {
+  const time = await podcast.getPodcastTime(db, timeId);
+  if (!time) return null;
+  const people = await podcast.cancelPodcastTime(db, timeId);
+  if (!people) return null;
+  for (const p of people) {
+    const locale = localeOf(p.portal);
+    await notify(db, p, templates.podcastTimeCancelled(locale, { name: firstName(p.name), when: formatPodcastTime(time, locale) }));
+  }
+  return people.length;
 }

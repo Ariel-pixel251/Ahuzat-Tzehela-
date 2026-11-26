@@ -5,18 +5,21 @@ import { registerOnBehalf } from "@/app/actions/admin";
 import { ActionForm, MultiSelect, SelectField, TextField } from "@/components/forms";
 import { Notice } from "@/components/ui";
 import { LANGUAGES } from "@/config/languages";
-import { ARRANGE_BY_MESSAGE, DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
+import { DIGITAL_NEEDS } from "@/config/options";
 
 const TYPES = [
   { value: "event", label: "Event registration" },
   { value: "digital", label: "Digital support (book a slot)" },
-  { value: "podcast", label: "Podcast sign-up" },
+  { value: "podcast", label: "Podcast time" },
 ];
 
 const opts = (list: readonly { code: string; en: string }[]) => list.map((o) => ({ value: o.code, label: o.en }));
 const languages = opts(LANGUAGES);
 
-/** Staff and leaders enter a resident's details for them (phone call, in person). */
+/**
+ * Staff and leaders enter a resident's details for them (phone call, in person): the same fields as
+ * the resident's own two screens (the slot, name, phone and the one extra question).
+ */
 export function RegisterOnBehalf({
   staff,
   events,
@@ -48,7 +51,7 @@ export function RegisterOnBehalf({
         success={(s) => (
           <Notice kind="ok">
             <p className="font-bold">{s.message}</p>
-            <p>Tell the resident their request code. Reload the page to register someone else.</p>
+            <p>Tell the resident their request code (they need it only to cancel). Reload the page to register someone else.</p>
           </Notice>
         )}
         className="max-w-xl"
@@ -64,43 +67,30 @@ export function RegisterOnBehalf({
           </div>
         )}
         {type === "digital" && (
-          <SelectField
-            name="slot"
-            label="Slot"
-            options={slots.map((s) => ({ value: s.id, label: s.full ? `${s.label} (full)` : s.label }))}
-          />
+          <SelectField name="slot" label="Slot" options={slots.map((s) => ({ value: s.id, label: s.full ? `${s.label} (full)` : s.label }))} />
         )}
+        {type === "podcast" && <SelectField name="time" label="Podcast time" options={podcastTimes.map((x) => ({ value: x.id, label: x.label }))} />}
         <TextField name="name" label="Resident's name" required />
         <TextField name="phone" label="Phone" type="tel" required />
-        <TextField name="email" label="Email (optional)" type="email" />
 
         {type === "event" && (
           <>
-            <SelectField name="attendees" label="Number of people" defaultValue="1" options={Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))} />
-            {(event?.form === "language-night" || event?.languages) && <MultiSelect name="languages" label="Languages they speak" options={languages} summary={(n) => (n ? `${n} selected` : "Choose…")} />}
-            {event?.form === "game-night" && (
-              <SelectField name="preferred_language" label="Play with someone who speaks…" defaultValue="none" options={[{ value: "none", label: "No preference" }, ...languages]} />
+            <SelectField name="attendees" label="Number of people" defaultValue="1" options={[{ value: "1", label: "1" }, { value: "2", label: "2" }]} />
+            {(event?.form === "language-night" || event?.languages) && (
+              <MultiSelect name="languages" label="Languages they speak (optional)" options={languages} summary={(n) => (n ? `${n} selected` : "Choose…")} />
             )}
-            <TextField name="notes" label="Notes" multiline />
           </>
         )}
         {type === "digital" && (
-          <>
-            <MultiSelect name="needs" label="Needs help with" options={opts(DIGITAL_NEEDS)} summary={(n) => (n ? `${n} selected` : "Choose…")} />
-            <TextField name="needs_other" label="Other / details" />
-          </>
+          <MultiSelect name="needs" label="Needs help with (optional)" options={opts(DIGITAL_NEEDS)} summary={(n) => (n ? `${n} selected` : "Choose…")} />
         )}
         {type === "podcast" && (
-          <>
-            <MultiSelect name="topics" label="Topics" options={opts(PODCAST_TOPICS)} summary={(n) => (n ? `${n} selected` : "Choose…")} />
-            <SelectField name="language" label="Preferred language" defaultValue="he" options={languages} />
-            <SelectField
-              name="time"
-              label="Podcast time"
-              defaultValue={podcastTimes[0]?.id ?? ARRANGE_BY_MESSAGE}
-              options={[...podcastTimes.map((x) => ({ value: x.id, label: x.label })), { value: ARRANGE_BY_MESSAGE, label: "No time: arrange by message" }]}
-            />
-          </>
+          <SelectField
+            name="language"
+            label="Language"
+            defaultValue="he"
+            options={[...languages.filter((l) => ["he", "en", "ru"].includes(l.value)), { value: "other", label: "Another language" }]}
+          />
         )}
       </ActionForm>
     </>

@@ -101,7 +101,8 @@ export const templates = {
     };
   },
 
-  slotVolunteered(p: { name: string; slot: string; pending: boolean; url: string }): Message {
+  /** A student's place in a slot: when and where, and the link to cancel it. */
+  slotVolunteered(p: { name: string; slot: string; pending: boolean; cancelUrl: string | null }): Message {
     return {
       subject: subject(p.pending ? "Digital support: waiting for approval" : "Digital support: you're signed up"),
       body:
@@ -109,14 +110,27 @@ export const templates = {
         (p.pending
           ? `Thanks for volunteering for ${clean(p.slot, 300)}. A leader will approve your place soon.`
           : `You're signed up to help on ${clean(p.slot, 300)}. Thank you!`) +
-        `\n\nYour slots, the residents' needs and (48 hours before) their phone numbers: ${p.url}${sign.en}`,
+        `\n\nThe day before, we'll email you the first names of the residents you'll help and what they need.` +
+        (p.cancelUrl ? `\nCan't make it? Cancel here: ${p.cancelUrl}` : "") +
+        sign.en,
     };
   },
 
-  slotReminder(locale: Locale, p: { name: string; slot: string }): Message {
-    return locale === "he"
-      ? { subject: "תזכורת: עזרה עם הטלפון או המחשב מחר", body: `שלום ${clean(p.name, 100)},\nתזכורת: מחר, ${clean(p.slot, 300)}. נתראה!${sign.he}` }
-      : { subject: "Reminder: digital support tomorrow", body: `Hi ${clean(p.name, 100)},\n\nA reminder: you're helping tomorrow, ${clean(p.slot, 300)}. Thank you!${sign.en}` };
+  /** Residents' day-before reminder. */
+  slotReminder(p: { name: string; slot: string }): Message {
+    return { subject: "תזכורת: עזרה עם הטלפון או המחשב מחר", body: `שלום ${clean(p.name, 100)},\nתזכורת: מחר, ${clean(p.slot, 300)}. נתראה!${sign.he}` };
+  },
+
+  /** A volunteer's day-before reminder: who is booked and what they need. Never their phone numbers. */
+  volunteerReminder(p: { name: string; slot: string; residents: string[] }): Message {
+    const residents = p.residents.map((r) => `- ${clean(r, 300)}`).join("\n");
+    return {
+      subject: "Reminder: digital support tomorrow",
+      body:
+        `Hi ${clean(p.name, 100)},\n\nA reminder: you're helping tomorrow, ${clean(p.slot, 300)}.` +
+        (residents ? `\n\nResidents booked so far:\n${residents}` : "\n\nNo residents have booked yet; some may come on the day.") +
+        `\n\nThank you!${sign.en}`,
+    };
   },
 
   slotChanged(locale: Locale, p: { name: string; before: string; after: string }): Message {
@@ -127,7 +141,7 @@ export const templates = {
         }
       : {
           subject: "Digital support: your slot changed",
-          body: `Hi ${clean(p.name, 100)},\n\nYour slot changed.\nWas: ${clean(p.before, 300)}\nNow: ${clean(p.after, 300)}\nIf you can't make it, please cancel under My sign-ups.${sign.en}`,
+          body: `Hi ${clean(p.name, 100)},\n\nYour slot changed.\nWas: ${clean(p.before, 300)}\nNow: ${clean(p.after, 300)}\nIf you can't make it, please cancel with the link in your sign-up email.${sign.en}`,
         };
   },
 
@@ -139,84 +153,66 @@ export const templates = {
 
   // ---------------------------------------------------------------- podcast
 
-  podcastJoined(locale: Locale, p: { name: string; code: string; when?: string | null; manageUrl?: string | null }): Message {
-    const when = p.when ? clean(p.when) : null;
+  /** Signed up for a podcast time: when and where (residents: the request code; students: the cancel link). */
+  podcastJoined(locale: Locale, p: { name: string; code: string; when: string | null; cancelUrl?: string | null }): Message {
+    const when = p.when ? clean(p.when, 300) : null;
     return locale === "he"
       ? {
-          subject: "נרשמתם לפודקאסט",
+          subject: "נרשמת לפודקאסט",
           body:
-            `שלום ${clean(p.name, 100)},\nתודה שנרשמתם לפודקאסט! נחפש לכם שותף.` +
-            (when ? `\nהמועד שבחרתם: ${when}.` : "") +
+            `שלום ${clean(p.name, 100)},\nנרשמת לפודקאסט!` +
+            (when ? `\nנתראה ב${when}.` : "") +
             `\nקוד הבקשה: ${clean(p.code, 4)}` +
             sign.he,
         }
       : {
-          subject: "Your podcast page",
+          subject: "Podcast: you're signed up",
           body:
-            `Hi ${clean(p.name, 100)},\n\nThanks for joining the podcast project!` +
-            (when ? ` Your time: ${when}.` : "") +
-            ` Your private page (keep this link to yourself):\n${p.manageUrl ?? ""}\n\nThere you can ask someone to pair with you and answer requests.${sign.en}`,
+            `Hi ${clean(p.name, 100)},\n\nYou're signed up for the podcast` +
+            (when ? `: ${when}.` : ".") +
+            `\nWe'll email you when a resident has chosen the same time.` +
+            (p.cancelUrl ? `\n\nCan't make it? Cancel here: ${p.cancelUrl}` : "") +
+            sign.en,
         };
   },
 
-  podcastPairRequest(locale: Locale, p: { name: string; from: string }): Message {
-    return locale === "he"
-      ? { subject: "בקשה לפודקאסט", body: `שלום ${clean(p.name, 100)},\n${clean(p.from, 100)} רוצה להקליט איתכם פודקאסט. ניצור קשר כדי לתאם.${sign.he}` }
-      : {
-          subject: subject(`${clean(p.from, 100)} wants to pair with you`),
-          body: `Hi ${clean(p.name, 100)},\n\n${clean(p.from, 100)} asked to be your podcast partner. Open your podcast page (the link from your sign-up email) to accept or decline.${sign.en}`,
-        };
-  },
-
-  podcastPaired(locale: Locale, p: { name: string; partner: string; partnerContact: string }): Message {
-    return locale === "he"
-      ? { subject: "יש לכם שותף לפודקאסט", body: `שלום ${clean(p.name, 100)},\nמצאנו לכם שותף לפודקאסט: ${clean(p.partner, 100)}. ניצור קשר כדי לתאם הקלטה.${sign.he}` }
-      : {
-          subject: subject(`Podcast pair: ${clean(p.partner, 100)}`),
-          body: `Hi ${clean(p.name, 100)},\n\nYou're paired with ${clean(p.partner, 100)} for the podcast.\nContact: ${clean(p.partnerContact)}\n\nGet in touch to plan your first recording.${sign.en}`,
-        };
-  },
-
-  /** Sent when an admin makes the pair (and ticks "send them a message"): who, and when they meet. */
-  podcastPairedByAdmin(locale: Locale, p: { name: string; partner: string; when: string | null; place: string | null; partnerContact?: string }): Message {
+  /** Paired (automatically, or by the team): the partner's first name and when and where they meet. No contact details. */
+  podcastPaired(locale: Locale, p: { name: string; partner: string; partnerLanguage?: string | null; when: string | null; place: string | null }): Message {
     const [name, partner] = [clean(p.name, 100), clean(p.partner, 100)];
     const when = p.when ? clean(p.when) : null;
     const place = p.place ? clean(p.place) : null;
     if (locale === "he") {
       return {
-        subject: "יש לכם שותף לפודקאסט",
-        body:
-          `שלום ${name},\nהשותף שלכם לפודקאסט: ${partner}.` +
-          (when ? `\nנפגשים: ${when}${place ? `, ${place}` : ""}.` : "\nניצור קשר כדי לתאם מתי נפגשים.") +
-          sign.he,
+        subject: "יש לך שותף לפודקאסט",
+        body: `שלום ${name},\nהשותף שלך לפודקאסט: ${partner}.` + (when ? `\nנפגשים: ${when}${place ? `, ${place}` : ""}.` : "") + sign.he,
       };
     }
     return {
       subject: subject(`Podcast pair: ${partner}`),
       body:
         `Hi ${name},\n\nYou're paired with ${partner} for the podcast.` +
-        (when ? `\nYou meet: ${when}${place ? `, ${place}` : ""}.` : "\nWe'll be in touch to arrange when you meet.") +
-        (p.partnerContact ? `\nContact: ${clean(p.partnerContact)}` : "") +
-        sign.en,
+        (p.partnerLanguage ? `\nLanguage: ${clean(p.partnerLanguage, 60)}.` : "") +
+        (when ? `\nYou meet: ${when}${place ? `, ${place}` : ""}.` : "") +
+        `\n\nYou choose the topic together at the meeting.${sign.en}`,
     };
   },
 
+  podcastTimeCancelled(locale: Locale, p: { name: string; when: string }): Message {
+    return locale === "he"
+      ? { subject: "מועד הפודקאסט בוטל", body: `שלום ${clean(p.name, 100)},\nהמועד ${clean(p.when, 300)} בוטל. סליחה! אפשר להירשם למועד אחר באתר.${sign.he}` }
+      : { subject: "Podcast: time cancelled", body: `Hi ${clean(p.name, 100)},\n\nThe podcast time on ${clean(p.when, 300)} has been cancelled. You're welcome to sign up for another time on the site.${sign.en}` };
+  },
+
   /** Sent when an admin puts a student into a digital support slot: when, where, and who is booked. */
-  helperAssigned(p: { name: string; slot: string; residents: string[]; url: string }): Message {
+  helperAssigned(p: { name: string; slot: string; residents: string[]; cancelUrl: string | null }): Message {
     const residents = p.residents.map((r) => clean(r, 50)).join(", ");
     return {
       subject: "Digital support: you're helping",
       body:
         `Hi ${clean(p.name, 100)},\n\nYou're helping with digital support on ${clean(p.slot, 300)}.` +
         `\n${residents ? `Residents booked so far: ${residents}.` : "No residents have booked yet."}` +
-        `\n\nThank you! See your slots here: ${p.url}${sign.en}`,
-    };
-  },
-
-  studentSignIn(p: { name: string; url: string }): Message {
-    return {
-      subject: "Your sign-in link",
-      body: `Hi ${clean(p.name, 100)},\n\nUse this link to sign in (valid for 30 minutes, works once):\n${p.url}\n\nIf you didn't ask for it, ignore this email.${sign.en}`,
+        (p.cancelUrl ? `\nCan't make it? Cancel here: ${p.cancelUrl}` : "") +
+        `\n\nThank you!${sign.en}`,
     };
   },
 };

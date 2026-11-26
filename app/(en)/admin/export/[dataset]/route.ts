@@ -23,15 +23,15 @@ const exports: Record<string, Export> = {
     const [slots, bookings, volunteers] = await Promise.all([listSlotsForAdmin(db), listBookingsForAdmin(db), listVolunteersForAdmin(db)]);
     const slotOf = (id: string) => slots.find((s) => s.id === id);
     return [
-      ["slot_date", "start", "end", "place", "slot_status", "kind", "name", "phone", "email", "needs", "needs_other", "status", "code", "registered_by"],
+      ["slot_date", "start", "end", "place", "slot_status", "kind", "name", "phone", "email", "needs", "needs_other", "status", "code", "registered_by", "age_group", "guardian_name", "guardian_phone"],
       [
         ...bookings.map((b) => {
           const s = slotOf(b.slot_id);
-          return [s?.slot_date, s?.start_time, s?.end_time, s?.place_he, s?.status, "resident", b.name, b.phone, b.email, b.needs, b.needs_other, b.status, b.code, b.registered_by];
+          return [s?.slot_date, s?.start_time, s?.end_time, s?.place_he, s?.status, "resident", b.name, b.phone, b.email, b.needs, b.needs_other, b.status, b.code, b.registered_by, "", "", ""];
         }),
         ...volunteers.map((v) => {
           const s = slotOf(v.slot_id);
-          return [s?.slot_date, s?.start_time, s?.end_time, s?.place_he, s?.status, "student", v.student_name, v.student_phone, v.student_email, "", "", v.status, "", ""];
+          return [s?.slot_date, s?.start_time, s?.end_time, s?.place_he, s?.status, "student", v.student_name, v.student_phone, v.student_email, "", "", v.status, "", "", v.age_group, v.guardian_name, v.guardian_phone];
         }),
       ],
     ];
@@ -44,8 +44,8 @@ const exports: Record<string, Export> = {
     };
     const partner = (id: string) => pairs.find((p) => p.members.some((m) => m.id === id))?.members.find((m) => m.id !== id)?.name ?? "";
     return [
-      ["name", "portal", "email", "phone", "topics", "language", "time", "availability", "status", "partner", "active", "code", "registered_by", "created_at"],
-      people.map((p) => [p.name, p.portal, p.email, p.phone, p.topics, p.language, timeOf(p.time_id), p.availability, p.status, partner(p.id), p.active, p.code, p.registered_by, p.created_at]),
+      ["name", "portal", "email", "phone", "topics", "language", "time", "status", "partner", "active", "code", "registered_by", "created_at"],
+      people.map((p) => [p.name, p.portal, p.email, p.phone, p.topics, p.language, timeOf(p.time_id) ?? "no time chosen", p.status, partner(p.id), p.active, p.code, p.registered_by, p.created_at]),
     ];
   },
   messages: async (db) => [

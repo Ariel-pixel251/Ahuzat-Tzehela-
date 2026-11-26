@@ -45,8 +45,8 @@ describe("brand", () => {
   });
 
   test("messages are signed with the organisation and the branch, never 'EMIS ×'", () => {
-    const he = templates.podcastJoined("he", { name: "רבקה", code: "1234" }).body;
-    const en = templates.podcastJoined("en", { name: "Dana", code: "1234", manageUrl: "https://x.test/p" }).body;
+    const he = templates.podcastJoined("he", { name: "רבקה", code: "1234", when: null }).body;
+    const en = templates.podcastJoined("en", { name: "Dana", code: "1234", when: null, cancelUrl: "https://x.test/p" }).body;
     expect(he).toContain(BRAND.branchName.he);
     expect(en).toContain(BRAND.branchName.en);
     expect(he + en).not.toMatch(/EMIS ×/);

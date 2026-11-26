@@ -32,8 +32,8 @@ test("screenshots", async ({ page }) => {
   await page.goto("/residents");
   await shot(page, "residents-home");
   await page.goto("/residents/help");
-  await expect(page.getByRole("radio").first()).toBeVisible();
-  await page.getByRole("radio").first().click();
+  await expect(page.getByRole("button", { name: / · / }).first()).toBeVisible();
+  await page.getByRole("button", { name: / · / }).first().click();
   await shot(page, "residents-booking-step");
 
   // student portal

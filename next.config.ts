@@ -23,6 +23,15 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite"],
   // the privacy notices are read from legal/*.md at request time
   outputFileTracingIncludes: { "/**": ["./legal/**/*.md"] },
+  // old student sign-in and podcast-page links (from emails) lead to the pages that replaced them
+  async redirects() {
+    return [
+      { source: "/students/sign-in", destination: "/students/digital-support", permanent: false },
+      { source: "/students/auth", destination: "/students/digital-support", permanent: false },
+      { source: "/students/mine", destination: "/students/digital-support", permanent: false },
+      { source: "/students/podcast/manage", destination: "/students/podcast", permanent: false },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

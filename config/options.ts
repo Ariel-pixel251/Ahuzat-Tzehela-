@@ -20,8 +20,8 @@ export const PODCAST_TOPICS = [
 export const DIGITAL_NEEDS = [
   { code: "phone", en: "Phone", he: "טלפון" },
   { code: "whatsapp", en: "WhatsApp", he: "וואטסאפ" },
-  { code: "email", en: "Email", he: "אימייל" },
-  { code: "banking", en: "Online banking", he: "בנקאות" },
+  { code: "email", en: "Email", he: "מייל" },
+  { code: "banking", en: "Online banking", he: "בנק" },
   { code: "other", en: "Something else", he: "אחר" },
 ] as const;
 
@@ -33,10 +33,7 @@ export const PROJECTS = [
   { code: "other", en: "Other", he: "אחר" },
 ] as const;
 
-/** Chosen instead of one of the team's podcast times: "send me a message and we'll arrange it". */
-export const ARRANGE_BY_MESSAGE = "contact";
-
-/** Asked on the student profile; under 18 needs a parent or guardian's details and okay. */
+/** Asked on the student sign-up card; under 18 needs a parent or guardian's details and okay. */
 export const AGE_GROUPS = [
   { code: "under-18", en: "Under 18", he: "מתחת לגיל 18" },
   { code: "18-plus", en: "18 or older", he: "18 ומעלה" },

@@ -17,7 +17,6 @@ export default function StudentsLayout({ children }: { children: React.ReactNode
     { href: "/students/events", label: t.nav.events },
     { href: "/students/digital-support", label: t.nav.digital },
     { href: "/students/podcast", label: t.nav.podcast },
-    { href: "/students/mine", label: t.nav.mine },
   ];
   return (
     <>

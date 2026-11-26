@@ -1,7 +1,7 @@
 "use client";
 
-import { startTransition, useActionState } from "react";
-import { checkStatus } from "@/app/actions/residents";
+import { startTransition, useActionState, useRef } from "react";
+import { cancelWithCode, checkStatus } from "@/app/actions/residents";
 import { buttonClass } from "@/components/ui";
 import type { StatusItem } from "@/lib/db/misc";
 import { HONEYPOT } from "@/lib/form";
@@ -26,10 +26,13 @@ function describe(item: StatusItem): string {
 
 export function StatusForm() {
   const [state, action, pending] = useActionState(checkStatus, null);
+  const [cancelState, cancel, cancelling] = useActionState(cancelWithCode, null);
+  const formRef = useRef<HTMLFormElement>(null);
   const items = state?.ok ? (state.data as StatusItem[]) : [];
   return (
     <>
       <form
+        ref={formRef}
         className="space-y-6"
         onSubmit={(e) => {
           e.preventDefault();
@@ -72,6 +75,29 @@ export function StatusForm() {
             ))}
           </ul>
         )}
+        {items.length > 0 &&
+          (cancelState?.ok ? (
+            <p role="status" className="mt-6 rounded-xl border-s-8 border-ok bg-ok-soft p-4 text-2xl font-bold text-ok">{cancelState.message}</p>
+          ) : (
+            <div className="mt-6">
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => {
+                  if (!formRef.current) return;
+                  const fd = new FormData(formRef.current);
+                  fd.delete(HONEYPOT);
+                  startTransition(() => cancel(fd));
+                }}
+                className={`${buttonClass.secondary} w-full min-h-[72px] text-2xl`}
+              >
+                {t.signup.cancel}
+              </button>
+              {cancelState && !cancelState.ok && cancelState.message && (
+                <p role="alert" className="mt-2 text-xl font-bold text-bad">{cancelState.message}</p>
+              )}
+            </div>
+          ))}
       </div>
     </>
   );

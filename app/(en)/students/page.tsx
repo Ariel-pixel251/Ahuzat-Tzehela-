@@ -8,7 +8,6 @@ const cards = [
   { href: "/students/events", ...t.home.cards.events },
   { href: "/students/digital-support", ...t.home.cards.digital },
   { href: "/students/podcast", ...t.home.cards.podcast },
-  { href: "/students/mine", ...t.home.cards.mine },
 ];
 
 export default async function StudentsHome() {

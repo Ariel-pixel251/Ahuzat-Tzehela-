@@ -86,3 +86,28 @@ export function AddHelperForm({ slotId, students }: { slotId: string; students: 
     </ActionForm>
   );
 }
+
+/** Admin: pair a resident and a student who chose the same podcast time (they meet at that time). */
+export function TimePairForm({ timeId, residents, students }: { timeId: string; residents: { id: string; label: string }[]; students: { id: string; label: string }[] }) {
+  return (
+    <ActionForm action={pairPodcast} submitLabel="Pair them" pendingLabel="Saving…" className="max-w-2xl">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor={`r-${timeId}`} className="block font-bold">Resident</label>
+          <select id={`r-${timeId}`} name="a" required defaultValue="" className={select}>
+            <option value="">Choose…</option>
+            {residents.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`s-${timeId}`} className="block font-bold">Student</label>
+          <select id={`s-${timeId}`} name="b" required defaultValue="" className={select}>
+            <option value="">Choose…</option>
+            {students.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <Checkbox name="notify" defaultChecked label="Tell them (first name of their partner, and when and where they meet)" />
+    </ActionForm>
+  );
+}

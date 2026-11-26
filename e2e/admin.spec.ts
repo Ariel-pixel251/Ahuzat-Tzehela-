@@ -25,5 +25,5 @@ test("make a podcast pair from two people typed in, with a meeting time and a me
   await expect(page.getByText(/meets 2030-11-03 16:00, בספרייה/)).toBeVisible();
   // the resident has no email: the message waits in the "send by hand" list
   await page.goto("/admin/messages");
-  await expect(page.getByText(/השותף שלכם לפודקאסט: Noa/)).toBeVisible();
+  await expect(page.getByText(/השותף שלך לפודקאסט: Noa/)).toBeVisible();
 });
