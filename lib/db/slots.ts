@@ -33,8 +33,6 @@ export type Slot = SlotInput & {
   helpers: number;
 };
 
-/** Hours before a slot from which its volunteers see the residents' phone numbers. */
-export const CONTACT_WINDOW_HOURS = 48;
 /** Weekly series are capped, so a typo in "until" can't create hundreds of slots. */
 export const MAX_SERIES_OCCURRENCES = 60;
 
@@ -205,19 +203,22 @@ export type Booking = BookingInput & {
 };
 
 export type BookResult =
-  | { status: "booked"; id: string; code: string; token: string | null }
+  | { status: "booked"; id: string; code: string; token: string }
   | { status: "not_found" | "closed" | "full" | "duplicate" };
 
-/** Books a place atomically (see book_digital_slot). An edit-link token only when there's an email. */
+/**
+ * Books a place atomically (see book_digital_slot). The cancel token (only its hash is stored) is
+ * kept on the resident's confirmation screen, or emailed if they gave an email.
+ */
 export async function bookSlot(db: Db, slotId: string, input: BookingInput, { staff = false } = {}): Promise<BookResult> {
   const code = newCode();
-  const token = input.email ? newToken() : null;
+  const token = newToken();
   const [row] = await db.query<{ r_id: string | null; r_status: string }>(
     `select r_id, r_status from book_digital_slot($1::uuid, $2::text::jsonb, $3)`,
-    [slotId, JSON.stringify({ ...input, code, manage_token_hash: token?.hash ?? null }), staff],
+    [slotId, JSON.stringify({ ...input, code, manage_token_hash: token.hash }), staff],
   );
   if (row.r_status !== "booked" || !row.r_id) return { status: row.r_status as "not_found" | "closed" | "full" | "duplicate" };
-  return { status: "booked", id: row.r_id, code, token: token?.raw ?? null };
+  return { status: "booked", id: row.r_id, code, token: token.raw };
 }
 
 export async function getBooking(db: Db, id: string) {
@@ -279,6 +280,28 @@ export async function volunteer(db: Db, slotId: string, studentId: string, { aut
   return row.r;
 }
 
+/** Gives a student's place in a slot a new cancel token (only its hash is stored). Returns the raw token. */
+export async function newVolunteerCancelToken(db: Db, slotId: string, studentId: string) {
+  const token = newToken();
+  const rows = await db.query(
+    `update digital_volunteers set manage_token_hash = $3
+      where slot_id = $1 and student_id = $2 and status <> 'cancelled' returning id`,
+    [slotId, studentId, token.hash],
+  );
+  return rows.length ? token.raw : null;
+}
+
+/** The place behind a cancel link, with its slot (null if the link is unknown). */
+export async function getVolunteerByToken(db: Db, rawToken: string) {
+  const [row] = await db.query<VolunteerRow>(
+    `select v.id, v.slot_id, v.student_id, v.status, st.name as student_name, st.email as student_email, st.phone as student_phone,
+            st.age_group, st.guardian_name, st.guardian_phone
+       from digital_volunteers v join students st on st.id = v.student_id where v.manage_token_hash = $1`,
+    [hashToken(rawToken)],
+  );
+  return row ?? null;
+}
+
 /** A student cancels their own place, up to `cutoffHours` before the start. */
 export async function cancelOwnVolunteering(db: Db, volunteerId: string, studentId: string, cutoffHours: number) {
   const [row] = await db.query<{ ok: boolean }>(`select cancel_volunteer($1::uuid, $2::uuid, $3::int) as ok`, [
@@ -321,11 +344,15 @@ export type VolunteerRow = {
   student_name: string;
   student_email: string | null;
   student_phone: string | null;
+  age_group: "under-18" | "18-plus" | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
 };
 
 export const listVolunteersForAdmin = (db: Db) =>
   db.query<VolunteerRow>(
-    `select v.id, v.slot_id, v.student_id, v.status, st.name as student_name, st.email as student_email, st.phone as student_phone
+    `select v.id, v.slot_id, v.student_id, v.status, st.name as student_name, st.email as student_email, st.phone as student_phone,
+            st.age_group, st.guardian_name, st.guardian_phone
        from digital_volunteers v
        join digital_slots s on s.id = v.slot_id
        join students st on st.id = v.student_id
@@ -335,7 +362,8 @@ export const listVolunteersForAdmin = (db: Db) =>
 
 export async function getVolunteer(db: Db, id: string) {
   const [row] = await db.query<VolunteerRow>(
-    `select v.id, v.slot_id, v.student_id, v.status, st.name as student_name, st.email as student_email, st.phone as student_phone
+    `select v.id, v.slot_id, v.student_id, v.status, st.name as student_name, st.email as student_email, st.phone as student_phone,
+            st.age_group, st.guardian_name, st.guardian_phone
        from digital_volunteers v join students st on st.id = v.student_id where v.id = $1`,
     [id],
   );
@@ -350,43 +378,15 @@ export const listBookedFirstNames = (db: Db, slotId: string) =>
     [slotId],
   );
 
-/** A student's own places (not cancelled), with the slot. */
-export const listStudentSlots = (db: Db, studentId: string) =>
-  db.query<Slot & { volunteer_id: string; volunteer_status: VolunteerStatus }>(
-    `select o.*, v.id as volunteer_id, v.status as volunteer_status
-       from digital_volunteers v join digital_slot_overview o on o.id = v.slot_id
-      where v.student_id = $1 and v.status <> 'cancelled' and o.ends_at > now() - interval '7 days'
-      order by o.slot_date, o.start_time`,
-    [studentId],
-  );
-
-export type ResidentForVolunteer = {
-  slot_id: string;
-  first_name: string;
-  needs: string[];
-  needs_other: string | null;
-  /** only within CONTACT_WINDOW_HOURS before the slot, for a confirmed volunteer who accepted the code of conduct */
-  phone: string | null;
-};
-
 /**
- * The residents booked into THIS student's slots: first name and need only. The phone number is
- * added by the database itself, and only when the student is a confirmed volunteer of that slot,
- * has accepted the code of conduct, and the slot starts within CONTACT_WINDOW_HOURS (until it ends).
+ * The residents booked into a slot, for its volunteers' reminder: first name and what help they
+ * need. Never their phone number: students don't get residents' contact details.
  */
-export const listResidentsForVolunteer = (db: Db, studentId: string) =>
-  db.query<ResidentForVolunteer>(
-    `select b.slot_id, split_part(trim(b.name), ' ', 1) as first_name, b.needs, b.needs_other,
-            case when v.status = 'confirmed' and st.conduct_accepted_at is not null
-                      and now() >= o.starts_at - make_interval(hours => $2::int) and now() <= o.ends_at
-                 then b.phone end as phone
-       from digital_volunteers v
-       join students st on st.id = v.student_id
-       join digital_slot_overview o on o.id = v.slot_id
-       join digital_bookings b on b.slot_id = v.slot_id and b.status = 'confirmed'
-      where v.student_id = $1 and v.status <> 'cancelled' and o.status = 'scheduled'
-      order by o.slot_date, o.start_time, b.created_at`,
-    [studentId, CONTACT_WINDOW_HOURS],
+export const listResidentsForReminder = (db: Db, slotId: string) =>
+  db.query<{ first_name: string; needs: string[]; needs_other: string | null }>(
+    `select split_part(trim(name), ' ', 1) as first_name, needs, needs_other from digital_bookings
+      where slot_id = $1 and status = 'confirmed' order by created_at`,
+    [slotId],
   );
 
 // ---------------------------------------------------------------- notifications

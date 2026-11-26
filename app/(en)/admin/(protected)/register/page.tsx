@@ -28,10 +28,12 @@ export default async function RegisterResident() {
         staff={admin.email}
         events={events}
         slots={slotChoices}
-        podcastTimes={times.map((x) => ({
-          id: x.id,
-          label: `${formatPodcastTime(x, "en")} (${placesLeft(x, "resident")} of ${x.pairs} resident places free${x.open ? "" : ", closed"})`,
-        }))}
+        podcastTimes={times
+          .filter((x) => x.status === "scheduled")
+          .map((x) => ({
+            id: x.id,
+            label: `${formatPodcastTime(x, "en")} (${placesLeft(x, "resident")} of ${x.resident_places} resident places free${x.open ? "" : ", closed"})`,
+          }))}
       />
     </>
   );

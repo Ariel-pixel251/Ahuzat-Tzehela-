@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { LANGUAGES } from "@/config/languages";
-import { DIGITAL_NEEDS, PODCAST_TOPICS, PROJECTS } from "@/config/options";
+import { DIGITAL_NEEDS, PROJECTS } from "@/config/options";
 import { addStudentByAdmin, revokeStudent } from "@/lib/db/students";
 import { adminEmails, DEV_ADMIN_COOKIE, devLoginAllowed, getAdmin, isAdminEmail, supabaseAuthConfigured, supabaseServer } from "@/lib/auth/admin";
 import { eventForm, getEvent } from "@/lib/calendar";
@@ -22,6 +22,7 @@ import {
   approveVolunteer,
   blockDateAndCancel,
   bookDigital,
+  cancelPodcastTimeAndNotify,
   cancelSlotAndNotify,
   joinPodcast,
   notifyEventCancelled,
@@ -137,7 +138,8 @@ export async function createPodcastTimeAction(_: ActionState, fd: FormData): Pro
       end_time: v.time,
       place_he: v.text(200),
       place_en: v.optionalText(200),
-      pairs: v.int(1, 50),
+      resident_places: v.int(1, 50),
+      student_places: v.int(1, 50),
       repeat: v.checkbox,
       until: v.optionalDate,
     })
@@ -165,13 +167,14 @@ export async function setPodcastTimeOpenAction(_: ActionState, fd: FormData): Pr
   });
 }
 
-export async function deletePodcastTimeAction(_: ActionState, fd: FormData): Promise<ActionState> {
+export async function cancelPodcastTimeAction(_: ActionState, fd: FormData): Promise<ActionState> {
   return asAdmin(async (db, admin) => {
     const id = idOf(fd);
     if (!id) return badId;
-    await podcastDb.deletePodcastTime(db, id);
-    await misc.audit(db, admin.email, "podcast_time.delete", id);
-    return done("Deleted. Anyone who chose it is still signed up, without a time.");
+    const n = await cancelPodcastTimeAndNotify(db, id);
+    if (n === null) return { ok: false, message: "This time was already cancelled." };
+    await misc.audit(db, admin.email, "podcast_time.cancel", id, { notified: n });
+    return done(`Cancelled. ${n} people were told.`);
   });
 }
 
@@ -587,72 +590,50 @@ export async function registerOnBehalf(_: ActionState, fd: FormData): Promise<Ac
     const staffOf = (s: string | null) => `staff: ${s || admin.email}`.slice(0, 200);
     const base = await getBaseUrl();
 
+    // the same fields as the resident's own screens: name, phone and the one extra question
     if (type === "event") {
       const key = v.eventKey.safeParse(fd.get("event"));
       const event = key.success ? await getEvent(key.data) : null;
       if (!event || !eventForm(event)) return { ok: false, errors: { event: "Please choose an event." } };
       const r = validate(
-        form({
-          ...common,
-          email: v.optionalEmail,
-          event: v.eventKey,
-          attendees: v.int(1, 10),
-          languages: v.codes(LANGUAGES),
-          other_language: v.optionalText(60),
-          preferred_language: v.optionalLanguage,
-          notes: v.optionalText(500, { multiline: true }),
-        }),
+        form({ ...common, event: v.eventKey, attendees: v.int(1, 2), languages: v.codes(LANGUAGES) }),
         formObject(fd, ["languages"]),
       );
       if (!r.ok) return fail(r.errors);
       const d = r.data;
-      const person = {
-        name: d.name,
-        phone: d.phone,
-        email: d.email,
-        attendees: d.attendees,
-        languages: d.languages,
-        other_language: d.other_language,
-        preferred_language: d.preferred_language,
-        notes: d.notes,
-      };
+      const person = { name: d.name, phone: d.phone, email: null, attendees: d.attendees, languages: d.languages, other_language: null, preferred_language: null, notes: null };
       const res = await registerEvent(db, event, { ...person, portal: "resident", registered_by: staffOf(d.staff) }, base, { ignoreDeadline: true });
-      if (!("code" in res)) return { ok: false, message: `Not registered: ${res.status}.` };
+      if (!("code" in res)) return { ok: false, message: res.status === "duplicate" ? "This phone number is already registered for this event." : `Not registered: ${res.status}.` };
       await misc.audit(db, admin.email, "on_behalf.event", event.key, { status: res.status });
       return { ok: true, message: `Registered (${res.status}). Request code: ${res.code}`, code: res.code };
     }
 
     if (type === "digital") {
-      const r = validate(
-        form({ ...common, email: v.optionalEmail, slot: v.uuid, needs: v.codes(DIGITAL_NEEDS, { min: 1 }), needs_other: v.optionalText(300) }),
-        formObject(fd, ["needs"]),
-      );
+      const r = validate(form({ ...common, slot: v.uuid, needs: v.codes(DIGITAL_NEEDS) }), formObject(fd, ["needs"]));
       if (!r.ok) return fail(r.errors);
       const res = await bookDigital(
         db,
         r.data.slot,
-        { name: r.data.name, phone: r.data.phone, email: r.data.email, needs: r.data.needs, needs_other: r.data.needs_other, registered_by: staffOf(r.data.staff) },
+        { name: r.data.name, phone: r.data.phone, email: null, needs: r.data.needs, needs_other: null, registered_by: staffOf(r.data.staff) },
         base,
         { staff: true },
       );
       await misc.audit(db, admin.email, "on_behalf.digital", r.data.slot, { status: res.status });
+      if (res.status === "duplicate") return { ok: false, message: "This phone number already has a place in this slot." };
       if (res.status !== "booked") return { ok: false, message: `Not booked: ${res.status}.` };
       return { ok: true, message: `Booked. Request code: ${res.code}`, code: res.code };
     }
 
     if (type === "podcast") {
-      const r = validate(
-        form({ ...common, email: v.optionalEmail, topics: v.codes(PODCAST_TOPICS, { min: 1 }), language: v.language, time: v.podcastTime }),
-        formObject(fd, ["topics"]),
-      );
+      const r = validate(form({ ...common, language: v.language, time: v.uuid }), formObject(fd));
       if (!r.ok) return fail(r.errors);
       const d = r.data;
-      const person = { name: d.name, phone: d.phone, email: d.email, topics: d.topics, language: d.language, availability: null, time_id: d.time };
+      const person = { name: d.name, phone: d.phone, email: null, topics: [], language: d.language, availability: null, time_id: d.time };
       const res = await joinPodcast(db, { ...person, portal: "resident", registered_by: staffOf(d.staff) }, base, { staff: true });
-      await misc.audit(db, admin.email, "on_behalf.podcast", null, { status: res === "blocked" ? res : res.status });
-      if (res === "blocked") return { ok: false, message: "This person is blocked." };
-      if (res.status === "duplicate") return { ok: false, message: "This phone or email is already signed up for the podcast." };
-      if (res.status !== "joined") return { ok: false, message: "That podcast time is gone (deleted or already started). Choose another." };
+      await misc.audit(db, admin.email, "on_behalf.podcast", d.time, { status: res.status });
+      if (res.status === "blocked") return { ok: false, message: "This person is blocked." };
+      if (res.status === "duplicate") return { ok: false, message: "This phone number is already signed up for the podcast." };
+      if (res.status !== "joined") return { ok: false, message: "That podcast time is gone (cancelled or already started). Choose another." };
       return { ok: true, message: `Signed up. Request code: ${res.code}`, code: res.code };
     }
 

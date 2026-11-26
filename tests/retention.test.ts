@@ -10,7 +10,7 @@ import {
 } from "@/lib/db/misc";
 import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
-import { addStudentByAdmin, createLoginToken, exchangeLoginToken, getStudent, revokeStudent, saveProfile, upsertStudent } from "@/lib/db/students";
+import { addStudentByAdmin, getStudent, revokeStudent, saveProfile, upsertStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
 import { testDb } from "./helpers/db";
 
@@ -169,24 +169,13 @@ describe("4-digit code lockout", () => {
   });
 });
 
-describe("students: verification, blocking, retention", () => {
-  test("before signing in, a later request's name replaces an earlier one; after, nobody can change it", async () => {
-    await upsertStudent(db, { name: "Prank Name", email: "dana@emis.test", phone: null });
-    const real = await upsertStudent(db, { name: "Dana Real", email: "dana@emis.test", phone: null });
-    expect(real.name).toBe("Dana Real");
-    await exchangeLoginToken(db, (await createLoginToken(db, real.id))!);
-    expect((await upsertStudent(db, { name: "Prank Again", email: "DANA@emis.test", phone: null })).name).toBe("Dana Real");
-  });
-
-  test("blocking signs a student out and cancels their places", async () => {
+describe("students: blocking, retention", () => {
+  test("blocking cancels a student's places", async () => {
     const s = await upsertStudent(db, { name: "Bad Actor", email: "bad@emis.test", phone: null });
-    const session = (await exchangeLoginToken(db, (await createLoginToken(db, s.id))!))!;
     const id = (await slot(daysAgo(-3)))!;
     await slots.volunteer(db, id, s.id, { autoApprove: true });
     expect(await revokeStudent(db, { email: "BAD@emis.test", phone: null })).toBe(1);
-    const { getStudentBySession } = await import("@/lib/db/students");
-    expect(await getStudentBySession(db, session.token)).toBeNull();
-    expect(await slots.listStudentSlots(db, s.id)).toHaveLength(0);
+    expect((await slots.listVolunteersForAdmin(db)).filter((v) => v.student_id === s.id && v.status !== "cancelled")).toHaveLength(0);
   });
 
   test("deleting a parent's data removes it from their child's profile", async () => {

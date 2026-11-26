@@ -1,21 +1,31 @@
 "use server";
 
 import { z } from "zod";
-import { DIGITAL_NEEDS, PODCAST_TOPICS } from "@/config/options";
+import { DIGITAL_NEEDS } from "@/config/options";
 import { LANGUAGES } from "@/config/languages";
-import { eventForm, getCalendar, getEvent } from "@/lib/calendar";
+import { getCalendar, getEvent } from "@/lib/calendar";
 import * as eventsDb from "@/lib/db/events";
 import { clearCodeFailures, codeAttempt, createProblemReport, lookupStatus } from "@/lib/db/misc";
 import * as podcastDb from "@/lib/db/podcast";
 import * as slotsDb from "@/lib/db/slots";
-import { bookDigital, cancelEventRegistration, joinPodcast, registerEvent } from "@/lib/domain";
+import type { Db } from "@/lib/db/types";
+import { bookDigital, cancelByCode, cancelEventRegistration, joinPodcast, leavePodcastByToken, registerEvent } from "@/lib/domain";
+import { formatDateTime, formatEventWhen } from "@/lib/i18n/format";
 import type { ActionState } from "@/lib/form";
 import { residentsText, shared, studentsText } from "@/lib/i18n";
 import { allowed, getBaseUrl, guardForm, invalid, withDb } from "@/lib/server";
 import { form, formObject, v, validate } from "@/lib/validation";
 
 const he = shared("he").errors;
-const contact = { name: v.name, phone: v.phone(), email: v.optionalEmail };
+// residents give only a name and a phone number (no email)
+const contact = { name: v.name, phone: v.phone() };
+
+/** "יום שני, 1 בדצמבר, בשעה 17:30" and the place, for the success screen. */
+const slotDone = (x: { date: string; start_time: string; place_he: string }, token?: string) => ({
+  when: formatDateTime(x.date, x.start_time, "he"),
+  place: x.place_he,
+  token,
+});
 
 // ---------------------------------------------------------------- event registration
 
@@ -26,20 +36,16 @@ export async function registerResidentForEvent(_: ActionState, fd: FormData): Pr
     const key = v.eventKey.safeParse(fd.get("event"));
     const event = key.success ? await getEvent(key.data) : null;
     if (!event) return { ok: false, message: he.notFound };
-    const kind = eventForm(event);
-    const wantsLanguages = kind === "language-night" || event.languages;
-
     const schema = form({
       ...contact,
       event: v.eventKey,
-      attendees: v.int(1, 10),
-      languages: v.codes(LANGUAGES, { min: wantsLanguages ? 1 : 0 }),
-      other_language: v.optionalText(60),
-      preferred_language: v.optionalLanguage,
+      attendees: v.int(1, 2),
+      // language night: an optional row of languages
+      languages: v.codes(LANGUAGES),
     });
     const r = validate(schema, formObject(fd, ["languages"]));
     if (!r.ok) return invalid(r.errors, "he");
-
+    const done = { when: formatEventWhen(event, "he"), place: event.location?.he ?? null };
     const res = await registerEvent(
       db,
       event,
@@ -47,21 +53,23 @@ export async function registerResidentForEvent(_: ActionState, fd: FormData): Pr
         portal: "resident",
         name: r.data.name,
         phone: r.data.phone,
-        email: r.data.email,
+        email: null,
         attendees: r.data.attendees,
         notes: null,
         languages: r.data.languages,
-        other_language: r.data.other_language,
-        preferred_language: kind === "game-night" ? r.data.preferred_language : null,
+        other_language: null,
+        preferred_language: null,
         registered_by: null,
       },
       await getBaseUrl(),
     );
+    // already signed up with this phone: the same calm success (no code, so nobody learns someone else's)
+    if (res.status === "duplicate") return { ok: true, data: done };
     if (!("code" in res)) {
-      const messages = { duplicate: he.duplicate, closed: he.closed, "not-registrable": he.notFound, blocked: he.unavailable };
+      const messages = { closed: he.closed, "not-registrable": he.notFound, blocked: he.unavailable };
       return { ok: false, message: messages[res.status] };
     }
-    return { ok: true, code: res.code, waitlist: res.status === "waitlist" };
+    return { ok: true, code: res.code, waitlist: res.status === "waitlist", data: { ...done, token: res.token } };
   });
 }
 
@@ -71,33 +79,22 @@ export async function bookHelpSlot(_: ActionState, fd: FormData): Promise<Action
   return withDb("he", async (db) => {
     const stop = await guardForm(db, fd, "residents:help", "he", { perDay: 10 });
     if (stop) return stop;
-    const schema = form({
-      ...contact,
-      slot: v.uuid,
-      needs: v.codes(DIGITAL_NEEDS, { min: 1 }),
-      needs_other: v.optionalText(300),
-    });
+    // what help is needed: optional, nothing chosen is fine
+    const schema = form({ ...contact, slot: v.uuid, needs: v.codes(DIGITAL_NEEDS) });
     const r = validate(schema, formObject(fd, ["needs"]));
     if (!r.ok) return invalid(r.errors, "he");
     const res = await bookDigital(
       db,
       r.data.slot,
-      {
-        name: r.data.name,
-        phone: r.data.phone,
-        email: r.data.email,
-        needs: r.data.needs,
-        needs_other: r.data.needs_other,
-        registered_by: null,
-      },
+      { name: r.data.name, phone: r.data.phone, email: null, needs: r.data.needs, needs_other: null, registered_by: null },
       await getBaseUrl(),
     );
-    if (res.status === "booked") {
-      const slot = await slotsDb.getSlot(db, r.data.slot);
-      return { ok: true, code: res.code, data: slot ? { slot: { slot_date: slot.slot_date, start_time: slot.start_time, end_time: slot.end_time, place_he: slot.place_he, place_en: slot.place_en } } : undefined };
-    }
-    const messages = { not_found: he.slotClosed, closed: he.slotClosed, full: he.slotFull, duplicate: he.slotDuplicate, blocked: he.unavailable };
-    // send the person back to the time question, where they can pick another slot
+    const slot = await slotsDb.getSlot(db, r.data.slot);
+    const done = slot ? slotDone({ ...slot, date: slot.slot_date }) : undefined;
+    if (res.status === "booked") return { ok: true, code: res.code, data: done && { ...done, token: res.token } };
+    if (res.status === "duplicate") return { ok: true, data: done };
+    const messages = { not_found: he.slotClosed, closed: he.slotClosed, full: he.slotFull, blocked: he.unavailable };
+    // back to screen 1, where another slot can be chosen
     return { ok: false, message: messages[res.status], errors: { slot: messages[res.status] } };
   });
 }
@@ -108,22 +105,18 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
   return withDb("he", async (db) => {
     const stop = await guardForm(db, fd, "residents:podcast", "he");
     if (stop) return stop;
-    const schema = form({
-      ...contact,
-      topics: v.codes(PODCAST_TOPICS, { min: 1 }),
-      language: v.language,
-      time: v.podcastTime,
-    });
-    const r = validate(schema, formObject(fd, ["topics"]));
+    const schema = form({ ...contact, time: v.uuid, language: v.language });
+    const r = validate(schema, formObject(fd));
     if (!r.ok) return invalid(r.errors, "he");
     const res = await joinPodcast(
       db,
       {
         name: r.data.name,
         phone: r.data.phone,
-        email: r.data.email,
+        email: null,
         portal: "resident",
-        topics: r.data.topics,
+        // residents choose the topic together with their partner at the meeting
+        topics: [],
         language: r.data.language,
         availability: null,
         registered_by: null,
@@ -131,15 +124,18 @@ export async function joinPodcastAsResident(_: ActionState, fd: FormData): Promi
       },
       await getBaseUrl(),
     );
-    if (res === "blocked") return { ok: false, message: he.unavailable };
-    if (res.status === "duplicate") return { ok: false, message: he.alreadyJoined };
-    if (res.status !== "joined") {
-      const message = res.status === "full" ? he.slotFull : he.slotClosed;
-      // back to the time question, where another time can be chosen
-      return { ok: false, message, errors: { time: message } };
+    const time = await podcastDb.getPodcastTime(db, r.data.time);
+    const done = time ? slotDone({ ...time, date: time.time_date }) : undefined;
+    if (res.status === "joined") return { ok: true, code: res.code, data: done && { ...done, token: res.token } };
+    if (res.status === "blocked") return { ok: false, message: he.unavailable };
+    if (res.status === "duplicate") {
+      // the same time again: the same success; another time: say so
+      const existing = await podcastDb.getActiveParticipant(db, { phone: r.data.phone, email: null });
+      if (existing?.time_id === r.data.time) return { ok: true, data: done };
+      return { ok: false, message: residentsText.signup.alreadyInPodcast };
     }
-    const time = r.data.time ? await podcastDb.getPodcastTime(db, r.data.time) : null;
-    return { ok: true, code: res.code, data: time ? { slot: { ...time, slot_date: time.time_date } } : undefined };
+    const message = res.status === "full" ? he.slotFull : he.slotClosed;
+    return { ok: false, message, errors: { time: message } };
   });
 }
 
@@ -178,16 +174,43 @@ export async function checkStatus(_: ActionState, fd: FormData): Promise<ActionS
   });
 }
 
-// ---------------------------------------------------------------- cancel links (only for people who gave an email)
+// ---------------------------------------------------------------- cancel (status page with the code; the success screen with its token)
+
+export async function cancelWithCode(_: ActionState, fd: FormData): Promise<ActionState> {
+  return withDb("he", async (db) => {
+    if (!(await allowed(db, "residents:status", 10, 3600))) return { ok: false, message: he.rateLimited };
+    const r = validate(form({ phone: v.phone(), code: z.string().trim().regex(/^\d{4}$/, "text") }), formObject(fd));
+    if (!r.ok) return invalid(r.errors, "he");
+    if (!(await codeAttempt(db, r.data.phone))) return { ok: false, message: he.locked };
+    const n = await cancelByCode(db, r.data.phone, r.data.code, getCalendar);
+    if (!n) return { ok: false, message: residentsText.pages.status.notFound };
+    await clearCodeFailures(db, r.data.phone);
+    return { ok: true, message: residentsText.signup.cancelled };
+  });
+}
+
+/** The token-guarded cancels are rate-limited too, so tokens can't be guessed. */
+async function tokenFrom(db: Db, fd: FormData, locale: "he" | "en") {
+  if (!(await allowed(db, `${locale}:cancel`, 20, 600))) return null;
+  const token = v.token.safeParse(fd.get("token"));
+  return token.success ? token.data : null;
+}
 
 export async function cancelHelpByToken(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("he", async (db) => {
     const t = residentsText.pages.manage;
-    const token = v.token.safeParse(fd.get("token"));
-    if (!token.success) return { ok: false, message: t.invalid };
-    const booking = await slotsDb.getBookingByToken(db, token.data);
+    const token = await tokenFrom(db, fd, "he");
+    const booking = token ? await slotsDb.getBookingByToken(db, token) : null;
     if (!booking || !(await slotsDb.cancelBooking(db, booking.id))) return { ok: false, message: t.invalid };
     return { ok: true, message: t.cancelled };
+  });
+}
+
+export async function cancelPodcastByToken(_: ActionState, fd: FormData): Promise<ActionState> {
+  return withDb("he", async (db) => {
+    const token = await tokenFrom(db, fd, "he");
+    if (!token || !(await leavePodcastByToken(db, token))) return { ok: false, message: residentsText.pages.manage.invalid };
+    return { ok: true, message: residentsText.signup.cancelled };
   });
 }
 
@@ -195,9 +218,8 @@ export async function cancelRegistrationByToken(_: ActionState, fd: FormData): P
   const locale = fd.get("locale") === "en" ? "en" : "he";
   return withDb(locale, async (db) => {
     const invalidLink = locale === "en" ? studentsText.manage.invalid : residentsText.pages.manage.invalid;
-    const token = v.token.safeParse(fd.get("token"));
-    if (!token.success) return { ok: false, message: invalidLink };
-    const reg = await eventsDb.getRegistrationByToken(db, token.data);
+    const token = await tokenFrom(db, fd, locale);
+    const reg = token ? await eventsDb.getRegistrationByToken(db, token) : null;
     if (!reg || reg.status === "cancelled") return { ok: false, message: invalidLink };
     await cancelEventRegistration(db, reg, await getCalendar());
     return { ok: true };

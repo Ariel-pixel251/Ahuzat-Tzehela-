@@ -98,9 +98,13 @@ test("slots: create, book (a JSON parameter with a list), volunteer and the cont
   await saveProfile(db, s.id, { phone: null, age_group: "under-18", guardian_name: "Parent", guardian_phone: "0509999999" });
   expect(await slots.volunteer(db, id, s.id, { autoApprove: true })).toBe("confirmed");
   await acceptConduct(db, s.id);
-  const [r] = await slots.listResidentsForVolunteer(db, s.id);
-  expect(r).toMatchObject({ first_name: "רבקה", needs: ["whatsapp", "banking"], phone: "0501234567" });
-  expect(await slots.cancelOwnVolunteering(db, (await slots.listStudentSlots(db, s.id))[0].volunteer_id, s.id, 48)).toBe(false);
+  const [r] = await slots.listResidentsForReminder(db, id);
+  expect(r).toMatchObject({ first_name: "רבקה", needs: ["whatsapp", "banking"] });
+  expect(r).not.toHaveProperty("phone");
+  const token = (await slots.newVolunteerCancelToken(db, id, s.id))!;
+  const place = (await slots.getVolunteerByToken(db, token))!;
+  expect(place).toMatchObject({ slot_id: id, student_id: s.id, age_group: "under-18", guardian_name: "Parent" });
+  expect(await slots.cancelOwnVolunteering(db, place.id, s.id, 48)).toBe(false);
 
   const extra = await addStudentByAdmin(db, { name: "No Email", email: null, phone: null, added_by: "admin" });
   expect(extra).toBeTruthy();
@@ -175,7 +179,7 @@ test("podcast topics, pairs and the status lookup", async () => {
 test("podcast times: weekly times, choosing one (a JSON parameter), and a pair meeting at it", async () => {
   const first = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
   const last = new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10);
-  expect(await podcast.createPodcastTimes(db, { time_date: first, start_time: "10:00", end_time: "11:00", place_he: "בלובי", place_en: null, pairs: 1 }, last)).toBe(2);
+  expect(await podcast.createPodcastTimes(db, { time_date: first, start_time: "10:00", end_time: "11:00", place_he: "בלובי", place_en: null, resident_places: 1, student_places: 1 }, last)).toBe(2);
   const [time] = await podcast.listUpcomingTimes(db);
   expect(time).toMatchObject({ time_date: first, residents: 0, students: 0, open: true });
   expect(time.starts_at).toBeInstanceOf(Date);

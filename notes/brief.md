@@ -17,9 +17,17 @@ where they conflict) and how it was implemented. The source notes are in `meetin
   like the whole organisation's website. The organisation's logo always comes with the branch label "סניף EMIS" /
   "EMIS Branch" (`components/BrandLockup.tsx`, a test checks every page); EMIS and Ahuzat Tzahala appear smaller
   as partners. Footer disclaimer (wording to be confirmed). Names and wording in `config/brand.ts`. No greeting.
-- **Digital support slots:** admins create, edit, cancel, repeat weekly and block dates; residents book in a
-  wizard (time → need → name and phone → review); students volunteer; no overbooking; contact details only for
-  the student's own slots, after the code of conduct and within 48 hours; confirmations, reminders, change notices.
+- **Digital support slots:** admins create, edit, cancel, repeat weekly and block dates; residents book in the
+  two-screen sign-up (slot, then name and phone); students sign up on the slot card; no overbooking; students
+  never see residents' phone numbers (the day-before email has first names and needs only); confirmations,
+  reminders, change notices.
+- **Simple sign-up (2026-11, owner's request):** the admins create the slots; residents and students just pick
+  one, and nobody phones anyone to arrange anything. Every resident sign-up (podcast, digital help, events) is
+  the same two screens: "מתי נוח לך?" (big slot buttons, full and past ones hidden; events skip it), then
+  "איך קוראים לך ומה מספר הטלפון?" (the chosen slot with "לשנות", name, phone, at most one extra row with
+  the usual answer chosen, "להירשם"). Then "נרשמת! ✓", the code (only needed to cancel) and a cancel button.
+  No dropdowns, no email, nothing expires; a repeat sign-up shows the same success. Students sign up inside
+  the card with no account (school email is the identity check) and cancel with the link in their email.
 - **Security and privacy hardening:** parameterised SQL only (with a lint rule), strict server-side validation,
   injection and role tests, RLS deny-by-default, CSP and security headers, CSRF, rate limits, code lockout,
   admin checks everywhere with an audit log, safe errors and logs, email header safety, Dependabot/npm audit/
@@ -39,15 +47,20 @@ where they conflict) and how it was implemented. The source notes are in `meetin
   stricter than "public can only insert": the public API roles can't do anything.
 - The page that explains setup problems (`/admin/setup`) needs an admin, except while admin sign-in itself isn't
   configured (it's how the owner fixes that).
-- Admin sessions last 12 hours; student sessions 30 days.
+- Admin sessions last 12 hours. Students have no accounts or sessions any more (2026-11); the old session tables
+  stay unused (nothing destructive).
 - The 4-digit code: the phone number is the second factor; 5 wrong codes lock that phone for 24 hours.
 - Retention: event registrations 90 days after the event, slots and bookings 90 days after the slot, cancelled
   sign-ups 30 days, problem reports 1 year, audit log 2 years.
-- Students who volunteer give an age group; under-18s also a parent or guardian's name, phone and okay.
+- Students who volunteer say whether they're under 18; under-18s also give a parent or guardian's name and phone.
+  One checkbox agrees to both the privacy notice and the code of conduct (`/students/code-of-conduct`).
 - Admins can make podcast pairs and add slot helpers with people who never signed up (typed in by staff), and
   can send them a "who and when" message (owner's request).
 - Podcast times are set by the admins, like digital support slots (owner's request, 2026-10-22; this replaced the
-  hour scroll wheels): residents and students choose one, or "arrange by message"; a pair who chose the same time meets then.
+  hour scroll wheels). Since 2026-11: once or weekly, places for residents and for students, open/close, cancel
+  (tells everyone). A time for one resident and one student pairs them automatically; otherwise the admin pairs
+  people within the time. "Arrange by message" was removed; older sign-ups without a time show as "no time chosen".
+  Residents don't choose a topic (chosen together at the meeting); students choose one.
 - Seed events (offline fallback only) come from the meeting notes; they never open registration.
 
 ## Still open

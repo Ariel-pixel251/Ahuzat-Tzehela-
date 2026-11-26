@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { isLanguageCode } from "@/config/languages";
-import { ARRANGE_BY_MESSAGE } from "@/config/options";
 import { shared, type Shared } from "@/lib/i18n/en";
 import { HONEYPOT } from "@/lib/form";
 import { normalizePhone } from "@/lib/phone";
@@ -132,12 +131,6 @@ export const v = {
     .string()
     .optional()
     .transform((s) => s === "on"),
-  /** One of the team's podcast times (its id), or "contact" (arrange by message) → null. */
-  podcastTime: z
-    .string()
-    .trim()
-    .refine((s) => s === ARRANGE_BY_MESSAGE || UUID.test(s), "choose")
-    .transform((s) => (s === ARRANGE_BY_MESSAGE ? null : s)),
   consent: z.literal("on", { message: "consent" }),
   /** A calendar event key (iCal UID, maybe with "::date"): printable characters only. */
   eventKey: z.string().min(1, "choose").max(600, "choose").regex(/^[\x21-\x7e]+$/, "choose"),

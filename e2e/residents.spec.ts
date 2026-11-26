@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { contact, next, send } from "./helpers";
+import { adminSignIn, createPodcastTime, createSlot, inDays, next, residentSignUp, send } from "./helpers";
 
-// Full resident flows at 360px: everything by big buttons, one question per screen.
+// Full resident flows at 360px: every sign-up is the same two screens (when, then name and phone).
 
 test("the home page: three big buttons only, no greeting, no description line and no 'contact us'", async ({ page }) => {
   await page.goto("/residents");
@@ -14,61 +14,82 @@ test("the home page: three big buttons only, no greeting, no description line an
   await expect(page).toHaveTitle("ביחד לדורות, סניף EMIS | אחוזת צהלה");
 });
 
-test("register for an event (language night)", async ({ page }) => {
+test("an event in two screens: the event is the time, so straight to name and phone", async ({ page }) => {
   await page.goto("/residents");
   await page.getByRole("link", { name: "מה קורה השבוע?" }).click();
   await page.getByRole("link", { name: /אני רוצה להגיע\s*: ערב שפות/ }).first().click();
-  await expect(page.getByText("שלב 1 מתוך 4")).toBeVisible();
-
-  await next(page); // "אני לבד" is chosen already
-  await next(page); // no language chosen yet
-  await expect(page.getByText("נא לבחור אחת מהאפשרויות")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "איך קוראים לך ומה מספר הטלפון?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "לשנות" })).toHaveCount(0);
+  // 1 person is chosen already; languages are optional
+  await expect(page.getByRole("radio", { name: "1", exact: true })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "עברית" }).click();
   await page.getByRole("button", { name: "רוסית" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-  await next(page);
-
   await page.getByLabel("שם", { exact: true }).fill("רבקה כהן");
-  await page.getByLabel("טלפון", { exact: true }).fill("050 123 456");
-  await next(page);
-  await expect(page.getByText("נראה שחסרה ספרה, בדקו שוב")).toBeVisible();
   await page.getByLabel("טלפון", { exact: true }).fill("+972 50-123-4567");
-  await next(page);
-
-  await expect(page.getByRole("heading", { name: "זה מה שמילאתם:" })).toBeVisible();
-  await expect(page.getByText("050-123-4567")).toBeVisible();
-  await expect(page.getByText("עברית, רוסית")).toBeVisible();
-  await send(page);
-
-  await expect(page.getByRole("heading", { name: "תודה! קיבלנו." })).toBeVisible();
-  await expect(page.getByText(/נרשמתם לערב שפות/)).toBeVisible();
+  await page.getByRole("button", { name: "להירשם" }).click();
+  await expect(page.getByRole("heading", { name: /נרשמת!/ })).toBeVisible();
+  await expect(page.getByText(/^נתראה ב/)).toBeVisible();
   await expect(page.getByText(/^\d{4}$/)).toBeVisible();
+
+  // the same phone again: the same calm success
+  await page.reload();
+  await page.getByLabel("שם", { exact: true }).fill("רבקה כהן");
+  await page.getByLabel("טלפון", { exact: true }).fill("050-123-4567");
+  await page.getByRole("button", { name: "להירשם" }).click();
+  await expect(page.getByRole("heading", { name: /נרשמת!/ })).toBeVisible();
 });
 
-test("podcast with no time that fits: 'send me a message and we'll arrange it', then check the status", async ({ page }) => {
-  await page.goto("/residents");
-  await page.getByRole("link", { name: "פודקאסט" }).click();
-  await page.getByRole("button", { name: "סיפורי חיים" }).click();
-  await next(page);
-  await next(page); // Hebrew is chosen already
-  await expect(page.getByRole("heading", { name: "מתי נוח לכם להיפגש?" })).toBeVisible();
-  await next(page); // nothing chosen yet
-  await expect(page.getByText("נא לבחור אחת מהאפשרויות")).toBeVisible();
-  const byMessage = page.getByRole("radio", { name: "אף מועד לא מתאים? שלחו לי הודעה ונתאם" });
-  await byMessage.click();
-  await expect(byMessage).toHaveAttribute("aria-checked", "true");
-  await next(page);
-  await contact(page, "שרה לוי", "052-765-4321");
-  await expect(page.getByText("אף מועד לא מתאים? שלחו לי הודעה ונתאם")).toBeVisible();
-  await send(page);
-  await expect(page.getByRole("heading", { name: "תודה! קיבלנו." })).toBeVisible();
+test("podcast, help and an event: each in 2 screens; full slots hidden; no 'arrange by message'; no dropdowns or email", async ({ page }) => {
+  await adminSignIn(page);
+  await createPodcastTime(page, { date: inDays(9), start: "10:00", end: "11:00", place: "בפינת הקפה", placeEn: "Cafe corner" });
+  await createSlot(page, { date: inDays(9), start: "12:00", end: "13:00", place: "בפינת המחשב", placeEn: "Computer corner", residents: 1, helpers: 1 });
+
+  // podcast: 1 tap (the time) + name + phone + 1 tap (להירשם); Hebrew is chosen already
+  await page.goto("/residents/podcast");
+  await expect(page.getByRole("radio", { name: "עברית" })).toHaveCount(0);
+  await residentSignUp(page, { slot: /בפינת הקפה/, name: "אסתר", phone: "050-444-5555" });
+  await expect(page.getByText(/נתראה ב.*בשעה 10:00, בפינת הקפה/)).toBeVisible();
+
+  // help
+  await page.goto("/residents/help");
+  await residentSignUp(page, { slot: /בפינת המחשב/, name: "אסתר", phone: "050-444-5555" });
+  await expect(page.getByText(/נתראה ב.*בשעה 12:00, בפינת המחשב/)).toBeVisible();
+
+  // both now full for residents: not shown; the same phone again still shows success
+  for (const [path, place] of [["/residents/podcast", /בפינת הקפה/], ["/residents/help", /בפינת המחשב/]] as const) {
+    await page.goto(path);
+    await expect(page.getByRole("button", { name: place })).toHaveCount(0);
+  }
+
+  // event
+  await page.goto("/residents/events");
+  await page.getByRole("link", { name: /אני רוצה להגיע/ }).first().click();
+  await residentSignUp(page, { name: "אסתר", phone: "050-444-5555" });
+  await expect(page.getByRole("heading", { name: /נרשמת!/ })).toBeVisible();
+
+  for (const path of ["/residents/podcast", "/residents/help", "/residents/events", "/residents/register?event=x"]) {
+    await page.goto(path);
+    await expect(page.getByText(/שלחו לי הודעה ונתאם|אף מועד לא מתאים/)).toHaveCount(0);
+    await expect(page.locator("select")).toHaveCount(0);
+    await expect(page.locator("input[type=email]")).toHaveCount(0);
+  }
+});
+
+test("the code cancels from the status page", async ({ page }) => {
+  await adminSignIn(page);
+  await createSlot(page, { date: inDays(11), start: "09:00", end: "10:00", place: "בחדר הקריאה", placeEn: "Reading room", residents: 3, helpers: 1 });
+  await page.goto("/residents/help");
+  await residentSignUp(page, { slot: /בחדר הקריאה/, name: "שרה לוי", phone: "052-765-9999" });
   const code = (await page.getByText(/^\d{4}$/).textContent())!.trim();
 
   await page.goto("/residents/status");
-  await page.getByLabel("טלפון").fill("0527654321");
+  await page.getByLabel("טלפון").fill("0527659999");
   await page.getByLabel("קוד הבקשה").fill(code);
   await page.getByRole("button", { name: "בדיקה" }).click();
-  await expect(page.getByText("מחפשים לכם שותף")).toBeVisible();
+  await expect(page.getByText(/בחדר הקריאה/)).toBeVisible();
+  await page.getByRole("button", { name: "ביטול ההרשמה" }).click();
+  await expect(page.getByText("ההרשמה בוטלה.")).toBeVisible();
 });
 
 test("five wrong codes lock the status lookup for that phone number", async ({ page }) => {

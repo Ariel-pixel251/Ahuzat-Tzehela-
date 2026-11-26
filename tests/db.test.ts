@@ -3,7 +3,7 @@ import * as events from "@/lib/db/events";
 import { hitRateLimit, lookupStatus } from "@/lib/db/misc";
 import * as podcast from "@/lib/db/podcast";
 import * as slots from "@/lib/db/slots";
-import { createLoginToken, exchangeLoginToken, getStudentBySession, upsertStudent } from "@/lib/db/students";
+import { upsertStudent } from "@/lib/db/students";
 import type { Db } from "@/lib/db/types";
 import { testDb } from "./helpers/db";
 
@@ -12,7 +12,6 @@ beforeEach(async () => {
   db = await testDb();
 });
 
-const student = (n: number) => upsertStudent(db, { name: `Student ${n}`, email: `s${n}@emis.test`, phone: null });
 
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 const slotInput = (over: Partial<slots.SlotInput> = {}): slots.SlotInput => ({
@@ -52,24 +51,13 @@ describe("podcast pairs", () => {
       registered_by: null,
     });
 
-  test("request then accept forms a pair; statuses go looking → requested → paired", async () => {
+  test("makePair forms a pair; statuses go looking → paired", async () => {
     const s = (await join("Dana", "student", "dana@emis.test"))!;
     const r = (await join("Moshe Levi", "resident", "0521111111"))!;
     expect((await podcast.getParticipant(db, s.id))?.status).toBe("looking");
-    expect(await podcast.requestPair(db, s.id, r.id)).toBe("requested");
-    expect((await podcast.getParticipant(db, r.id))?.status).toBe("requested");
-    const [incoming] = await podcast.listPendingRequests(db, r.id);
-    expect(incoming.direction).toBe("in");
-    expect(await podcast.respondToRequest(db, incoming.id, r.id, true)).toBe("paired");
+    expect(await podcast.makePair(db, s.id, r.id)).not.toBeNull();
     expect((await podcast.getParticipant(db, s.id))?.status).toBe("paired");
     expect((await podcast.getPartner(db, s.id))?.id).toBe(r.id);
-  });
-
-  test("mutual requests pair at once", async () => {
-    const a = (await join("A", "student", "a@emis.test"))!;
-    const b = (await join("B", "resident", "0521111112"))!;
-    expect(await podcast.requestPair(db, a.id, b.id)).toBe("requested");
-    expect(await podcast.requestPair(db, b.id, a.id)).toBe("paired");
   });
 
   test("a person belongs to at most one pair", async () => {
@@ -78,20 +66,16 @@ describe("podcast pairs", () => {
     const c = (await join("C", "resident", "0521111113"))!;
     expect(await podcast.makePair(db, a.id, b.id)).not.toBeNull();
     expect(await podcast.makePair(db, a.id, c.id)).toBeNull();
-    expect(await podcast.requestPair(db, c.id, a.id)).toBe("unavailable");
     const results = await Promise.all([podcast.makePair(db, c.id, b.id), podcast.makePair(db, c.id, a.id)]);
     expect(results.every((r) => r === null)).toBe(true);
   });
 
-  test("pairing cancels other pending requests; unpairing frees both people", async () => {
+  test("unpairing frees both people", async () => {
     const a = (await join("A", "student", "a@emis.test"))!;
     const b = (await join("B", "resident", "0521111112"))!;
     const c = (await join("C", "student", "c@emis.test"))!;
-    await podcast.requestPair(db, c.id, b.id);
     const pairId = (await podcast.makePair(db, a.id, b.id))!;
-    expect(await podcast.listPendingRequests(db, c.id)).toHaveLength(0);
     await podcast.unpair(db, pairId);
-    // everyone is unpaired again (the public list shows only the students among them)
     const people = await podcast.listParticipants(db);
     expect(people.filter((p) => p.status !== "paired").map((p) => p.id).sort()).toEqual([a.id, b.id, c.id].sort());
   });
@@ -177,14 +161,15 @@ describe("event registration capacity and waiting list", () => {
 });
 
 describe("tokens and request codes", () => {
-  test("an edit link token is created only when there is an email, and finds the booking", async () => {
+  test("every booking gets a cancel token (for the confirmation screen), and only it finds the booking", async () => {
     const id = (await slots.createSlot(db, slotInput()))!;
     const withEmail = await slots.bookSlot(db, id, booking(1, { email: "r@example.com" }));
     const without = await slots.bookSlot(db, id, booking(2));
     if (withEmail.status !== "booked" || without.status !== "booked") throw new Error("not booked");
-    expect(withEmail.token).toBeTruthy();
-    expect(without.token).toBeNull();
-    expect((await slots.getBookingByToken(db, withEmail.token!))?.id).toBe(withEmail.id);
+    expect(withEmail.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(without.token).not.toBe(withEmail.token);
+    expect((await slots.getBookingByToken(db, withEmail.token))?.id).toBe(withEmail.id);
+    expect((await slots.getBookingByToken(db, without.token))?.id).toBe(without.id);
     expect(await slots.getBookingByToken(db, "not-a-real-token")).toBeNull();
     expect(withEmail.code).toMatch(/^\d{4}$/);
   });
@@ -199,25 +184,10 @@ describe("tokens and request codes", () => {
     expect(await lookupStatus(db, "0501234561", wrong)).toHaveLength(0);
   });
 
-  test("student login links work once and give a session", async () => {
-    const s = await student(1);
-    const login = (await createLoginToken(db, s.id))!;
-    const session = (await exchangeLoginToken(db, login))!;
-    expect((await getStudentBySession(db, session.token))?.id).toBe(s.id);
-    expect(await exchangeLoginToken(db, login)).toBeNull();
-  });
-
-  test("asking for a sign-in link with a signed-in student's email doesn't change their details", async () => {
-    const dana = await upsertStudent(db, { name: "Dana Real", email: "dana@emis.test", phone: "0501111111" });
-    await exchangeLoginToken(db, (await createLoginToken(db, dana.id))!);
-    const again = await upsertStudent(db, { name: "Someone Else", email: "DANA@emis.test", phone: "0509999999" });
-    expect(again).toMatchObject({ name: "Dana Real", phone: "0501111111" });
-  });
-
-  test("login links are rate-limited", async () => {
-    const s = await student(1);
-    for (let i = 0; i < 3; i++) expect(await createLoginToken(db, s.id)).toBeTruthy();
-    expect(await createLoginToken(db, s.id)).toBeNull();
+  test("signing up again with the same email updates the name and keeps a phone number already given", async () => {
+    await upsertStudent(db, { name: "Dana", email: "dana@emis.test", phone: "0501111111" });
+    const again = await upsertStudent(db, { name: "Dana Cohen", email: "DANA@emis.test", phone: null });
+    expect(again).toMatchObject({ name: "Dana Cohen", phone: "0501111111" });
   });
 });
 

@@ -3,7 +3,6 @@ import { describeDbError, isConnectionProblem } from "@/lib/db/errors";
 import { DbNotConfiguredError } from "@/lib/db/types";
 import { cleanEnvValue, parseEmailList, studentEmailAllowed } from "@/lib/env";
 import { adminEmailReason } from "@/lib/setup-status";
-import { v } from "@/lib/validation";
 
 describe("settings pasted into Vercel", () => {
   test.each([
@@ -62,14 +61,4 @@ test("admin sign-in email failures get a plain reason", () => {
   expect(adminEmailReason("Email address not authorized")).toMatch(/members of your Supabase organisation/);
   expect(adminEmailReason("Signups not allowed for otp")).toMatch(/sign-ups are disabled/);
   expect(adminEmailReason("something odd")).toMatch(/see the error/);
-});
-
-test("a podcast time is one of the team's times (an id) or 'arrange by message'", () => {
-  const parse = (time?: string) => v.podcastTime.safeParse(time);
-  expect(parse("2b1f0c7e-1d3a-4c5b-9e8f-0a1b2c3d4e5f").data).toBe("2b1f0c7e-1d3a-4c5b-9e8f-0a1b2c3d4e5f");
-  expect(parse("contact").data).toBeNull();
-  expect(parse("").success).toBe(false);
-  expect(parse(undefined).success).toBe(false);
-  expect(parse("10:00-12:00").success).toBe(false);
-  expect(parse("'; drop table podcast_times; --").success).toBe(false);
 });

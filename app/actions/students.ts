@@ -1,23 +1,15 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { LANGUAGES } from "@/config/languages";
-import { AGE_GROUPS, PODCAST_TOPICS } from "@/config/options";
-import { currentStudent, STUDENT_COOKIE } from "@/lib/auth/student";
+import { PODCAST_TOPICS } from "@/config/options";
 import { eventForm, getEvent } from "@/lib/calendar";
 import { createProblemReport, hitRateLimit, isBlocked } from "@/lib/db/misc";
-import * as podcastDb from "@/lib/db/podcast";
-import * as slotsDb from "@/lib/db/slots";
-import { acceptConduct, createLoginToken, deleteSession, exchangeLoginToken, profileComplete, saveProfile, upsertStudent } from "@/lib/db/students";
-import type { Db } from "@/lib/db/types";
-import { joinPodcast, registerEvent, requestPodcastPair, respondPodcastRequest, studentCancelCutoffHours, volunteerForSlot } from "@/lib/domain";
+import { acceptConduct, saveProfile, upsertStudent } from "@/lib/db/students";
+import { cancelVolunteerByToken, joinPodcast, leavePodcastByToken, registerEvent, studentCancelCutoffHours, volunteerForSlot } from "@/lib/domain";
 import { studentEmailAllowed, studentEmailDomains } from "@/lib/env";
 import type { ActionState } from "@/lib/form";
 import { shared, studentsText as t } from "@/lib/i18n";
-import { sendEmail } from "@/lib/notify";
-import { templates } from "@/lib/notify/templates";
 import { getBaseUrl, guardForm, invalid, withDb } from "@/lib/server";
 import { form, formObject, v, validate } from "@/lib/validation";
 
@@ -75,239 +67,115 @@ export async function registerStudentForEvent(_: ActionState, fd: FormData): Pro
   });
 }
 
-// ---------------------------------------------------------------- podcast
+// ---------------------------------------------------------------- sign-up from a card (no account)
 
-export async function joinPodcastAsStudent(_: ActionState, fd: FormData): Promise<ActionState> {
+/** The school email is the only identity check, so it must be a school address (when the rule is set). */
+function schoolEmailError(email: string) {
+  const domains = studentEmailDomains();
+  return studentEmailAllowed(email, domains) ? null : t.card.schoolEmailOnly(domains.map((x) => `@${x}`).join(", "));
+}
+
+/** Digital support: name, school email, age (a parent or guardian for under-18s), and the privacy notice and code of conduct. */
+export async function signUpForSlot(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guardForm(db, fd, "students:podcast", "en");
+    const stop = await guardForm(db, fd, "students:slot", "en", { max: 10 });
     if (stop) return stop;
     const schema = form({
+      slot: v.uuid,
       name: v.name,
       email: v.email,
-      phone: v.optionalPhone(intl),
-      topics: v.codes(PODCAST_TOPICS, { min: 1 }),
-      language: v.language,
-      time: v.podcastTime,
+      under_18: v.checkbox,
+      guardian_name: v.optionalText(100),
+      guardian_phone: v.optionalPhone(intl),
       consent: v.consent,
     });
-    const r = validate(schema, formObject(fd, ["topics"]));
+    const r = validate(schema, formObject(fd));
     if (!r.ok) return invalid(r.errors, "en");
-    const domains = studentEmailDomains();
-    if (!studentEmailAllowed(r.data.email, domains)) {
-      return { ok: false, errors: { email: t.signIn.schoolEmailOnly(domains.map((x) => `@${x}`).join(", ")) } };
-    }
     const d = r.data;
-    const input = { name: d.name, email: d.email, phone: d.phone, topics: d.topics, language: d.language, availability: null, time_id: d.time };
-    const res = await joinPodcast(db, { ...input, portal: "student", registered_by: null }, await getBaseUrl());
-    if (res === "blocked") return { ok: false, message: en.unavailable };
-    if (res.status === "duplicate") return { ok: false, message: en.alreadyJoined };
-    if (res.status !== "joined") {
-      const message = res.status === "full" ? en.slotFull : en.slotClosed;
-      return { ok: false, message, errors: { time: message } };
+    const emailError = schoolEmailError(d.email);
+    if (emailError) return { ok: false, errors: { email: emailError } };
+    if (d.under_18 && !(d.guardian_name && d.guardian_phone)) {
+      const errors: Record<string, string> = {};
+      if (!d.guardian_name) errors.guardian_name = t.card.guardianRequired;
+      if (!d.guardian_phone) errors.guardian_phone = t.card.guardianRequired;
+      return { ok: false, errors };
     }
-    revalidatePath("/students/podcast");
-    // the private link goes only to the inbox (owning the email is the proof); on screen only in local development
-    return { ok: true, data: process.env.NODE_ENV !== "production" ? { devLink: `/students/podcast/manage?token=${res.token}` } : undefined };
+    // by email too, so nobody can fill a slot by changing their IP address
+    if (!(await hitRateLimit(db, `students:slot:${d.email}`, 10, 3600))) return { ok: false, message: t.card.tooMany };
+    if (await isBlocked(db, null, d.email)) return { ok: false, message: en.unavailable };
+    const student = await upsertStudent(db, { name: d.name, email: d.email, phone: null });
+    await saveProfile(db, student.id, {
+      phone: null,
+      age_group: d.under_18 ? "under-18" : "18-plus",
+      guardian_name: d.under_18 ? d.guardian_name : null,
+      guardian_phone: d.under_18 ? d.guardian_phone : null,
+    });
+    await acceptConduct(db, student.id);
+    // no revalidatePath here: the card must keep showing "You're in" even when the slot is now full
+    const result = await volunteerForSlot(db, d.slot, student, await getBaseUrl());
+    if (result === "confirmed" || result === "pending") {
+      return { ok: true, message: result === "pending" ? t.digital.pending : t.digital.reminder };
+    }
+    const messages = { full: t.digital.full, duplicate: t.digital.alreadyIn, closed: t.digital.notOpen, not_found: t.digital.notOpen, blocked: en.unavailable };
+    return { ok: false, message: messages[result] };
   });
 }
 
-/** The podcast participant behind a private-page token (rate-limited: tokens must not be guessed). */
-async function participantFromToken(db: Db, fd: FormData) {
-  const token = v.token.safeParse(fd.get("token"));
-  if (!token.success) return null;
-  return podcastDb.getParticipantByToken(db, token.data);
-}
-
-export async function askToPair(_: ActionState, fd: FormData): Promise<ActionState> {
+/** Podcast: name, school email, one topic, language, and the privacy notice. */
+export async function signUpForPodcastTime(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guardForm(db, fd, "students:pair", "en", { max: 20 });
+    const stop = await guardForm(db, fd, "students:podcast", "en", { max: 10 });
     if (stop) return stop;
-    const me = await participantFromToken(db, fd);
-    const target = v.uuid.safeParse(fd.get("target"));
-    if (!me || !target.success) return { ok: false, message: t.podcast.invalid };
-    // students ask students; residents are paired by the team (so nobody can message residents)
-    const other = await podcastDb.getParticipant(db, target.data);
-    if (!other || other.portal !== "student") return { ok: false, message: t.podcast.unavailable };
-    const result = await requestPodcastPair(db, me.id, target.data);
-    revalidatePath("/students/podcast/manage");
-    const messages = {
-      requested: t.podcast.requested,
-      paired: t.podcast.paired,
-      already_requested: t.podcast.alreadyRequested,
-      unavailable: t.podcast.unavailable,
-    };
-    return { ok: result === "requested" || result === "paired", message: messages[result] };
+    const schema = form({
+      time: v.uuid,
+      name: v.name,
+      email: v.email,
+      topic: v.choice(PODCAST_TOPICS.map((x) => x.code)),
+      language: v.language,
+      consent: v.consent,
+    });
+    const r = validate(schema, formObject(fd));
+    if (!r.ok) return invalid(r.errors, "en");
+    const d = r.data;
+    const emailError = schoolEmailError(d.email);
+    if (emailError) return { ok: false, errors: { email: emailError } };
+    if (!(await hitRateLimit(db, `students:podcast:${d.email}`, 10, 3600))) return { ok: false, message: t.card.tooMany };
+    const res = await joinPodcast(
+      db,
+      { name: d.name, email: d.email, phone: null, topics: [d.topic], language: d.language, availability: null, time_id: d.time, portal: "student", registered_by: null },
+      await getBaseUrl(),
+    );
+    // no revalidatePath here: the card must keep showing "You're in" even when the time is now full
+    if (res.status === "joined") return { ok: true, message: t.podcast.pending };
+    const messages = { blocked: en.unavailable, duplicate: t.podcast.alreadyIn, full: t.podcast.full, closed: t.podcast.closed, not_found: t.podcast.closed };
+    return { ok: false, message: messages[res.status] };
   });
 }
 
-export async function answerPairRequest(_: ActionState, fd: FormData): Promise<ActionState> {
+// ---------------------------------------------------------------- cancel with the link from the email
+
+export async function cancelSlotPlaceByToken(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guardForm(db, fd, "students:pair", "en", { max: 20 });
+    // rate-limited: links must not be guessed
+    const stop = await guardForm(db, fd, "students:cancel", "en", { max: 20 });
     if (stop) return stop;
-    const me = await participantFromToken(db, fd);
-    const request = v.uuid.safeParse(fd.get("request"));
-    if (!me || !request.success) return { ok: false, message: t.podcast.invalid };
-    const accept = fd.get("accept") === "yes";
-    const result = await respondPodcastRequest(db, request.data, me.id, accept);
-    revalidatePath("/students/podcast/manage");
-    if (result === "unavailable") return { ok: false, message: t.podcast.unavailable };
-    return { ok: true, message: result === "paired" ? t.podcast.paired : t.podcast.declined };
+    const token = v.token.safeParse(fd.get("token"));
+    const result = token.success ? await cancelVolunteerByToken(db, token.data) : "invalid";
+    revalidatePath("/students/digital-support");
+    if (result === "cancelled") return { ok: true, message: t.digital.cancelled };
+    if (result === "too_late") return { ok: false, message: t.digital.cancelTooLate(await studentCancelCutoffHours(db)) };
+    return { ok: false, message: t.digital.invalid };
   });
 }
 
 export async function leavePodcast(_: ActionState, fd: FormData): Promise<ActionState> {
   return withDb("en", async (db) => {
-    const stop = await guardForm(db, fd, "students:pair", "en", { max: 20 });
-    if (stop) return stop;
-    const me = await participantFromToken(db, fd);
-    if (!me) return { ok: false, message: t.podcast.invalid };
-    await podcastDb.withdraw(db, me.id);
-    revalidatePath("/students/podcast");
-    return { ok: true, message: t.podcast.left };
-  });
-}
-
-// ---------------------------------------------------------------- student sign-in (magic link)
-
-export async function requestSignInLink(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withDb("en", async (db) => {
-    const stop = await guardForm(db, fd, "students:signin", "en", { max: 5 });
-    if (stop) return stop;
-    const r = validate(form({ name: v.name, email: v.email, phone: v.optionalPhone(intl), consent: v.consent }), formObject(fd));
-    if (!r.ok) return invalid(r.errors, "en");
-    // students see residents' phone numbers, so sign-in can be limited to school addresses
-    const domains = studentEmailDomains();
-    if (!studentEmailAllowed(r.data.email, domains)) {
-      return { ok: false, errors: { email: t.signIn.schoolEmailOnly(domains.map((d) => `@${d}`).join(", ")) } };
-    }
-    if (await isBlocked(db, r.data.phone, r.data.email)) return { ok: false, message: en.unavailable };
-    const student = await upsertStudent(db, r.data);
-    const token = await createLoginToken(db, student.id);
-    if (!token) return { ok: false, message: t.signIn.tooMany };
-    const url = `${await getBaseUrl()}/students/auth?token=${token}`;
-    const sent = await sendEmail(r.data.email, templates.studentSignIn({ name: student.name.split(" ")[0], url }));
-    // without an email provider (local development only), show the link on screen
-    if (sent === "logged" && process.env.NODE_ENV !== "production") return { ok: true, data: { devLink: url } };
-    if (sent === "logged") return { ok: false, message: en.emailNotSetUp };
-    if (sent !== "sent") return { ok: false, message: en.generic };
-    return { ok: true, message: t.signIn.sent };
-  });
-}
-
-export async function completeSignIn(_: ActionState, fd: FormData): Promise<ActionState> {
-  const res = await withDb("en", async (db) => {
-    const stop = await guardForm(db, fd, "students:auth", "en", { max: 10 });
+    const stop = await guardForm(db, fd, "students:cancel", "en", { max: 20 });
     if (stop) return stop;
     const token = v.token.safeParse(fd.get("token"));
-    const session = token.success ? await exchangeLoginToken(db, token.data) : null;
-    if (!session) return { ok: false, message: t.signIn.invalid };
-    (await cookies()).set(STUDENT_COOKIE, session.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: session.maxAgeSeconds,
-    });
-    return { ok: true };
-  });
-  if (res?.ok) redirect("/students/mine");
-  return res;
-}
-
-export async function signOut(): Promise<void> {
-  const store = await cookies();
-  const token = store.get(STUDENT_COOKIE)?.value;
-  if (token) {
-    await withDb("en", async (db) => {
-      await deleteSession(db, token);
-      return null;
-    });
-  }
-  store.delete(STUDENT_COOKIE);
-  redirect("/students/digital-support");
-}
-
-// ---------------------------------------------------------------- profile and code of conduct
-
-async function withStudent(fn: (db: Db, student: NonNullable<Awaited<ReturnType<typeof currentStudent>>>) => Promise<ActionState>) {
-  return withDb("en", async (db) => {
-    const student = await currentStudent(db);
-    if (!student) return { ok: false, message: t.digital.signInToVolunteer };
-    if (await isBlocked(db, student.phone, student.email)) return { ok: false, message: en.unavailable };
-    return fn(db, student);
-  });
-}
-
-export async function saveStudentProfile(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withStudent(async (db, student) => {
-    const schema = form({
-      phone: v.optionalPhone(intl),
-      age_group: v.choice(AGE_GROUPS.map((a) => a.code)),
-      guardian_name: v.optionalText(100),
-      guardian_phone: v.optionalPhone(intl),
-      guardian_confirm: v.checkbox,
-    });
-    const r = validate(schema, formObject(fd));
-    if (!r.ok) return invalid(r.errors, "en");
-    const minor = r.data.age_group === "under-18";
-    if (minor && !(r.data.guardian_name && r.data.guardian_phone && r.data.guardian_confirm)) {
-      return { ok: false, message: t.mine.guardianRequired };
-    }
-    await saveProfile(db, student.id, {
-      phone: r.data.phone,
-      age_group: r.data.age_group,
-      guardian_name: minor ? r.data.guardian_name : null,
-      guardian_phone: minor ? r.data.guardian_phone : null,
-    });
-    revalidatePath("/students/mine");
-    return { ok: true, message: t.mine.profileSaved };
-  });
-}
-
-export async function acceptCodeOfConduct(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withStudent(async (db, student) => {
-    if (fd.get("accept") !== "on") return { ok: false, errors: { accept: en.consent } };
-    await acceptConduct(db, student.id);
-    revalidatePath("/students/mine");
-    return { ok: true, message: t.mine.conductAccepted };
-  });
-}
-
-// ---------------------------------------------------------------- digital support: volunteer for slots
-
-export async function volunteerForSlotAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withStudent(async (db, student) => {
-    if (!student.email || !studentEmailAllowed(student.email)) return { ok: false, message: t.digital.signInToVolunteer };
-    if (!profileComplete(student)) return { ok: false, message: t.digital.profileNeeded };
-    if (!(await hitRateLimit(db, `students:volunteer:${student.id}`, 10, 3600))) return { ok: false, message: t.digital.tooMany };
-    const slot = v.uuid.safeParse(fd.get("slot"));
-    if (!slot.success) return { ok: false, message: t.digital.notOpen };
-    const result = await volunteerForSlot(db, slot.data, student, await getBaseUrl());
-    revalidatePath("/students/digital-support");
-    revalidatePath("/students/mine");
-    const messages = {
-      confirmed: t.digital.volunteered,
-      pending: t.digital.pending,
-      full: t.digital.full,
-      duplicate: t.digital.alreadyIn,
-      closed: t.digital.notOpen,
-      not_found: t.digital.notOpen,
-      blocked: en.unavailable,
-    };
-    return { ok: result === "confirmed" || result === "pending", message: messages[result] };
-  });
-}
-
-export async function cancelMyPlace(_: ActionState, fd: FormData): Promise<ActionState> {
-  return withStudent(async (db, student) => {
-    const id = v.uuid.safeParse(fd.get("volunteer"));
-    const cutoff = await studentCancelCutoffHours(db);
-    if (!id.success || !(await slotsDb.cancelOwnVolunteering(db, id.data, student.id, cutoff))) {
-      return { ok: false, message: t.mine.cancelTooLate(cutoff) };
-    }
-    revalidatePath("/students/mine");
-    revalidatePath("/students/digital-support");
-    return { ok: true, message: t.mine.cancelled };
+    const left = token.success && (await leavePodcastByToken(db, token.data));
+    revalidatePath("/students/podcast");
+    return left ? { ok: true, message: t.podcast.cancelled } : { ok: false, message: t.podcast.invalid };
   });
 }
 

@@ -23,15 +23,20 @@ Gmail (SMTP) or Resend for email · Vercel (hosting and daily cron) · Google Ca
    before. **Language night** asks for the languages people speak; **game night** offers "play with someone who
    speaks my language". Registrations keep a snapshot of the event (by iCal UID), so they survive calendar edits;
    cancelled or moved events are flagged for admins, and one click notifies everyone.
-2. **Podcast pairs**: admins create podcast times (once or weekly, with a number of pairs), like digital support
-   slots; people choose one when they sign up (or "arrange by message"). A "looking for a partner" list,
-   request → accept, or admins pair people; a pair who chose the same time meets then. One pair per person. Admins can also pair people who never signed up (typed in on the form), set when and where they
-   first meet, and send both a message with their partner and the time.
+2. **Podcast pairs**: admins create podcast times like digital support slots (once or weekly, with places for
+   residents and places for students; open/close; cancel, which tells everyone). People pick one. A time for one
+   resident and one student pairs them automatically; with more places, admins pair the people who chose it,
+   and the pair meets then. One pair per person. Admins can also pair people who never signed up (typed in on
+   the form), set when and where they first meet, and send both a message with their partner and the time.
 3. **Digital support** as admin-set time slots: admins create slots (one-off or weekly, with blocked dates for
-   holidays), residents book a place in a 4-step wizard, students volunteer as helpers. No overbooking (the database
-   locks the slot while counting). Students see only the first name and need of residents in **their** slots, and the
-   phone number only after the code of conduct and within 48 hours before the slot. Reminders the day before, and
+   holidays), residents book a place, students sign up as helpers right on the slot card. No overbooking (the
+   database locks the slot while counting). Students never see residents' phone numbers: the day before, they get
+   an email with the first names and needs of the residents in **their** slot. Reminders the day before, and
    notices when a slot changes or is cancelled. Admins can add a student who hasn't signed up and email them the slot.
+
+Every resident sign-up is the same two screens: "מתי נוח לך?" (one big button per open slot), then name and
+phone, then "נרשמת! ✓" with a 4-digit code (only needed to cancel) and a cancel button. Students have no
+accounts: they sign up inside a card with their school email and get a cancel link by email.
 
 Around them: **call me back** (name and phone, shown to admins), **report a problem** on both portals,
 a status page for residents (phone + 4-digit code), **register a resident on their behalf**, **leaders and tasks**,
@@ -65,7 +70,7 @@ With no environment values:
 | `NEXT_PUBLIC_SUPABASE_URL` | no | Supabase → **Connect** → Framework → Next.js (or Project Settings → API). |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | no (public by design) | Same place; starts with `sb_publishable_`. Every table is closed to it. |
 | `ADMIN_EMAILS` | no | Comma-separated emails allowed into `/admin` (admins and leaders). |
-| `STUDENT_EMAIL_DOMAINS` | no | Recommended: only these email domains can sign in as students, e.g. `em-is.org`. |
+| `STUDENT_EMAIL_DOMAINS` | no | Recommended: only these email domains can sign up as students, e.g. `em-is.org` (the only identity check for students; without it, every helper waits for a leader's approval in production). |
 | `SITE_URL` | no | The site's public address, e.g. `https://beyachad-ledorot.vercel.app`. |
 | `NEXT_PUBLIC_SITE_URL` | no | The same address; the logos in emails and the share image are loaded from it (falls back to `SITE_URL`). |
 | `SMTP_USER` | no | **Email, easiest option (free, no domain):** a Gmail address. |
@@ -191,10 +196,11 @@ These rules win over anything else for `/residents`:
 - Every page: the logos (linking home), "חזרה לדף הראשי" and "הגדל טקסט" (remembered in the browser).
 - Base text 22px (27px with bigger text), headings 32px+, line height 1.6, Heebo font, WCAG AAA contrast, tap
   targets of at least 56px, a thick visible focus ring.
-- Forms are wizards: one question per screen, big "הבא"/"חזרה" buttons, "שלב 2 מתוך 4", big choice buttons instead
-  of dropdowns, a review screen, and one
-  final button "אני מאשר/ת ושולח/ת" with one privacy sentence. Then a calm confirmation with a 4-digit request code.
-- Only name, phone and the choice; email is optional. Friendly error messages. Nothing times out.
+- Every sign-up (podcast, digital help, events) is the same two screens: "מתי נוח לך?" (one big button per open
+  slot; full and past slots aren't shown), then "איך קוראים לך ומה מספר הטלפון?" (the chosen slot with "לשנות",
+  name, phone, at most one extra row of big buttons with the usual answer chosen, and "להירשם"). Then "נרשמת! ✓",
+  when and where, a 4-digit code (only needed to cancel) and a cancel button. Report a problem stays a wizard.
+- Never dropdowns. Only name, phone and the choice; no email. Short error messages next to the field. Nothing times out.
 - Dates in words ("יום שלישי, 3 בנובמבר, 16:00 עד 17:30"), never ISO dates.
 - No accounts or passwords. Checked automatically: axe on every resident page, no horizontal scroll at 360px and
   at 200% zoom, the full flows with Playwright, including keyboard only.

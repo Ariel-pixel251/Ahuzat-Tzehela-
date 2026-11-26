@@ -28,11 +28,18 @@
 - אין "צרו קשר" (הוסר לבקשת הבעלים): מייל הארגון מופיע רק בהודעת הפרטיות (`contactEmail` ב-`config/brand.ts`).
   "דיווח על בעיה" נשאר (בטיחות).
 - טקסט בסיס 22px ומעלה, כותרות 32px ומעלה, ריווח שורות 1.6, גופן Heebo, ניגודיות AAA, מטרות לחיצה 56px ומעלה.
-- טפסים כאשף: שאלה אחת בכל מסך, "הבא"/"חזרה", "שלב 2 מתוך 4", כפתורי בחירה גדולים במקום רשימות נפתחות,
-  מסך סיכום וכפתור אחד "אני מאשר/ת ושולח/ת". אחרי השליחה: אישור רגוע וקוד בקשה בן 4 ספרות.
-  בפודקאסט בוחרים אחד ממועדי הפודקאסט שהמנהלים יוצרים (`podcast_times`, כמו מועדי הליווי הדיגיטלי), או
-  "אף מועד לא מתאים? שלחו לי הודעה ונתאם". זוג שבחר אותו מועד נפגש בו.
-- רק שם, טלפון (כל פורמט ישראלי) והבחירה עצמה. מייל לא חובה. הודעות שגיאה ידידותיות. שום דבר לא פג תוקף.
+- **כל הרשמה (פודקאסט, עזרה, אירוע) היא אותם שני מסכים** (`components/residents/SignUp.tsx`), כדי ללמוד פעם אחת:
+  1. "מתי נוח לך?": כפתור גדול (72px ומעלה) לכל מועד פנוי, תאריך ושעה במילים ומקום. מועדים מלאים ושעברו לא
+     מוצגים בכלל. בלי מועדים: רק "אין כרגע מועדים פנויים. כדאי לבדוק שוב בקרוב." באירוע מדלגים על המסך הזה.
+  2. "איך קוראים לך ומה מספר הטלפון?": המועד שנבחר בתיבה עם "לשנות" (זה גם הסיכום: בלי מסך סיכום ובלי
+     "שלב X מתוך Y"), שם וטלפון (`autocomplete`), לכל היותר שאלה נוספת אחת כשורת כפתורים שהתשובה הרגילה כבר
+     בחורה בה (פודקאסט: שפה, עברית; עזרה: במה, לא חובה; אירוע: 1 או 2 אנשים, ובערב שפות גם שפות, לא חובה),
+     כפתור "להירשם" ושורת פרטיות (בלי תיבת סימון).
+  אחרי השליחה: "נרשמת! ✓", "נתראה ב…", קוד בן 4 ספרות ("צריך אותו רק אם רוצים לבטל") וכפתור "ביטול ההרשמה".
+  אותו טלפון שוב לאותו מועד: אותה הודעת הצלחה (בלי קוד). אין "שלחו לי הודעה ונתאם": בוחרים רק ממועדי המנהלים.
+  טופס "דיווח על בעיה" נשאר אשף (`components/Wizard.tsx`).
+- **אף פעם לא רשימות נפתחות לדיירים**, ורק שם, טלפון (כל פורמט ישראלי) והבחירה עצמה. בלי מייל. הודעות שגיאה
+  קצרות ליד השדה, ולא מוחקים מה שהוקלד. שום דבר לא פג תוקף.
 - תאריכים במילים ("יום שני, 1 בנובמבר, בשעה 17:30"), אף פעם לא בפורמט ISO.
 - בלי חשבונות וסיסמאות לדיירים. בדיקות axe ו-Playwright ב-CI חייבות לעבור.
 
@@ -42,7 +49,7 @@
 - אירועים מגיעים רק מ-Google Calendar (פיד iCal ציבורי). לא מוסיפים אירועים בקוד;
   `data/events.seed.json` משמש רק כגיבוי כשהפיד לא זמין.
 - פרטי קשר אף פעם לא מוצגים לציבור או לתלמידים אחרים; RLS סוגר את כל הטבלאות למפתח הציבורי.
-  מתנדב רואה שם פרטי וצורך רק של דיירים במועדים שלו, וטלפון רק אחרי קוד ההתנהגות ו-48 שעות לפני המועד.
+  **תלמידים אף פעם לא רואים טלפון של דייר**: המתנדב מקבל במייל יום לפני רק שם פרטי וצורך, ובפודקאסט שם פרטי ושפה.
 - SQL רק עם פרמטרים (`$1, $2…`); כלל ESLint ו-`scripts/check-sql.mjs` נכשלים על SQL שנבנה מטקסט.
 - לפני PR: `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:e2e`.
 - עובדים בענפים (branch) ופותחים Pull Request; לא דוחפים ישירות ל-main.
@@ -69,15 +76,17 @@ problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tas
 | Business rules shared by portals and admin (registration, claiming, pairing, notifications) | `lib/domain.ts` |
 | SQL data access; every function takes a `Db` | `lib/db/*.ts`; connection in `lib/db/client.ts` |
 | Schema, RLS, atomic SQL functions (booking, volunteering, pairing, retention) | `supabase/migrations/0001_init.sql`; `supabase/reset.sql` (one-time, old schema) |
-| Podcast times (data / admin section / resident wizard step / student form) | `lib/db/podcast.ts`, `app/(en)/admin/(protected)/podcast/`, `lib/wizard-steps.ts` (`podcastSteps`), `components/students/PodcastSignup.tsx`; `supabase/migrations/0002_podcast_times.sql` |
-| Digital support slots (data / admin page / resident wizard / student pages) | `lib/db/slots.ts`, `app/(en)/admin/(protected)/digital-support/`, `lib/wizard-steps.ts` (`helpSteps`), `app/(en)/students/{digital-support,mine}/` |
+| Podcast times (data / admin: once or weekly, places per side, open/close, cancel, per-time people and pairs, auto-pairing at 1+1 / resident screens / student cards) | `lib/db/podcast.ts`, `lib/domain.ts` (`joinPodcast`, `autoPair`, `cancelPodcastTimeAndNotify`), `app/(en)/admin/(protected)/podcast/`, `lib/resident-signup.ts` (`podcastChoices`), `app/(en)/students/podcast/` (+ `cancel/`); `supabase/migrations/0002_podcast_times.sql`, `0004_simple_signup.sql` |
+| Digital support slots (data / admin page / resident screens / student cards, cancel link, day-before reminder) | `lib/db/slots.ts`, `app/(en)/admin/(protected)/digital-support/`, `lib/resident-signup.ts` (`helpChoices`), `app/(en)/students/digital-support/` (+ `cancel/`), `sendSlotReminders` in `lib/domain.ts` |
+| Students: sign-up inside a card (no account; school email is the only identity check) | `components/students/CardSignUp.tsx`, `signUpForSlot` / `signUpForPodcastTime` in `app/actions/students.ts`; old `/students/{sign-in,auth,mine}` and `/students/podcast/manage` redirect (`next.config.ts`) |
 | Brand name, contact email (privacy page only), legal texts | `config/brand.ts`, `legal/*.md` (rendered by `components/Markdown.tsx`, `{{contact_email}}` filled in by `lib/legal.ts`), `LEGAL_TODO.md` |
 | Logos (sizes, spacing, alt text), brand lockup, favicon, share image, email header, colours | `config/logos.ts`, `components/BrandLockup.tsx` (the only place the "ביחד לדורות" logo is shown), `components/Logos.tsx` (partners), `public/logos/` (originals in `assets/logos/`), `scripts/make-brand-images.mjs`, `scripts/extract-logo-colors.mjs` → `design/logo-colors.json`, `lib/site-metadata.ts`, `lib/notify/html.ts`, `design/DESIGN_SYSTEM.md` |
 | Security: CSP + admin guard, headers, logging, checks | `proxy.ts`, `next.config.ts`, `lib/log.ts`, `lib/admin-page.ts`, `scripts/check-*.mjs`, `SECURITY.md` |
 | Calendar: iCal parsing, tags/options, seed fallback, event health | `lib/calendar/` |
 | Text (no strings hard-coded in components) | `lib/i18n/en.ts` (students), `lib/i18n/he.ts` (residents); admin pages are English inline |
 | Editable lists | `config/languages.ts`, `config/options.ts` |
-| Resident wizard and its steps | `components/Wizard.tsx`, `lib/wizard-steps.ts` |
+| Resident sign-up (the two screens) and what they show | `components/residents/SignUp.tsx`, `lib/resident-signup.ts`; cancel on the status page with phone + code (`cancelWithCode`) |
+| Report-a-problem wizard (one question per screen) | `components/Wizard.tsx`, `lib/wizard-steps.ts` |
 | Student/admin forms | `components/forms.tsx` |
 | Email (SMTP e.g. Gmail app password, or Resend) + SMS/WhatsApp queue | `lib/notify/` |
 | Tests | `tests/` (Vitest, PGlite with the real migrations; `rls`, `injection`, `slots`, `retention`, `security`), `e2e/` (Playwright + axe, fixture calendar) |
@@ -85,8 +94,8 @@ problem_reports, blocked_contacts, audit_log, code_lockouts, leaders, leader_tas
 ### Common changes
 - **Wording:** edit `lib/i18n/he.ts` / `en.ts`; keep both portals' rules (Hebrew-only residents, English-only students).
 - **New field on a form:** zod schema in the action (`form({...})` is strict: unknown fields are rejected, so the
-  field must be added there) → `lib/domain.ts` / `lib/db/*` → a **new migration** → the form (resident: a wizard step
-  in `lib/wizard-steps.ts`; student: `components/students/*`) → admin list + CSV export → tests (also add it to
+  field must be added there) → `lib/domain.ts` / `lib/db/*` → a **new migration** → the form (resident: the one extra
+  row in `lib/resident-signup.ts`, never a second one without the owner; student: `components/students/*`) → admin list + CSV export → tests (also add it to
   `tests/injection.test.ts`).
 - **Database changes:** `0001_init.sql` was rewritten twice (scope change; then the owner had call-back requests removed,
   with `0003` doing the same on existing databases). From now on never edit it;
